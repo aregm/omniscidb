@@ -1000,7 +1000,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         "boolean, compression integer, "
         "comp_param integer, size integer, chunks text, is_systemcol boolean, "
         "is_virtualcol boolean, virtual_expr "
-        "text, is_deletedcol boolean, is_hotcol boolean, version_num BIGINT, "
+        "text, is_deletedcol boolean, is_hotcol boolean, is_softhotcol boolean, bufs_fetched BIGINT, unique_chunks_fetched BIGINT, data_fetched BIGINT, version_num BIGINT, "
         "primary key(tableid, columnid), unique(tableid, name))");
     dbConn->query(
         "CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text)");
@@ -2210,5 +2210,38 @@ SysCatalog::getGranteesOfSharedDashboards(const std::vector<std::string>& dashbo
   sqliteConnector_->query("END TRANSACTION");
   return active_grantees;
 }
+
+void
+SysCatalog::storeDataMgrStatistics(std::map<std::vector<int>, size_t> &columnFetchStats, std::map<std::vector<int>, size_t> &columnChunkStats, std::map<std::vector<int>, size_t> &columnFetchDataSizeStats)
+{
+	for (std::map<std::vector<int>, size_t>::const_iterator it2 = columnFetchStats.begin(); it2 != columnFetchStats.end(); ++it2) {
+		struct DBMetadata db;
+		std::shared_ptr<Catalog> cat;
+
+		if (SysCatalog::instance().getMetadataForDBById((it2->first)[0], db)) {
+			cat = Catalog::get(db.dbName);
+		
+			if (cat) {
+				cat->storeDataMgrStatistics((it2->first)[1], (it2->first)[2], it2->second, columnChunkStats[it2->first], columnFetchDataSizeStats[it2->first]);
+			}
+		}
+	}
+}
+
+void
+SysCatalog::clearDataMgrStatistics(void)
+{
+	std::shared_ptr<Catalog> cat;
+	std::list<DBMetadata> dblist;
+
+	dblist = SysCatalog::instance().getAllDBMetadata();
+	for (std::list<DBMetadata>::iterator it = dblist.begin(); it != dblist.end(); ++it) {
+		cat = Catalog::get(it->dbName);
+		if (cat) {
+			cat->clearDataMgrStatistics();
+		}
+	}
+}
+
 
 }  // namespace Catalog_Namespace

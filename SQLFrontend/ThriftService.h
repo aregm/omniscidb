@@ -38,7 +38,9 @@ enum ThriftService {
   kGET_DASHBOARDS,
   kGET_DASHBOARD,
   kHEAT_COLUMN,
-  kCOOL_COLUMN
+  kCOOL_COLUMN,
+  kDMSTATS,
+  kNODMSTATS
 };
 
 #endif

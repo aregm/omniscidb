@@ -54,7 +54,6 @@ void CpuBuffer::writeData(int8_t* const src,
                           const MemoryLevel srcMemoryLevel,
                           const int srcDeviceId) {
   if (srcMemoryLevel == CPU_LEVEL) {
-	  printf("write data dst=%p, src=%p\n", mem_ + offset, src);
     // std::cout << "Writing to CPU from source CPU" << std::endl;
     memcpy(mem_ + offset, src, numBytes);
   } else if (srcMemoryLevel == GPU_LEVEL) {

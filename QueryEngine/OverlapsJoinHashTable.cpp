@@ -35,9 +35,9 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
   const auto& query_info =
       get_inner_query_info(getInnerTableId(condition.get(), executor), query_infos).info;
   const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
-  if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
-    throw TooManyHashEntries();
-  }
+//  if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+//    throw TooManyHashEntries();
+//  }
   const auto shard_count = memory_level == Data_Namespace::GPU_LEVEL
                                ? BaselineJoinHashTable::getShardCountForCondition(
                                      condition.get(), ra_exe_unit, executor)

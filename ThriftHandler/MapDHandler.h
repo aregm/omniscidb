@@ -427,6 +427,8 @@ class MapDHandler : public MapDIf {
   bool cool_column(const TSessionId& session,
                             const std::string& table_name,
                             const std::string& column_name) override;
+  void dmstats(const TSessionId& session) override;
+  void nodmstats(const TSessionId& session) override;
 
   void shutdown();
   // end of sync block for HAHandler and mapd.thrift

@@ -194,6 +194,38 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
         return context.client.heat_column(context.session, arg1, arg2);
       case kCOOL_COLUMN:
         return context.client.cool_column(context.session, arg1, arg2);
+      case kDMSTATS:
+        context.client.dmstats(context.session);
+        break;
+      case kNODMSTATS:
+        context.client.nodmstats(context.session);
+        break;
+      default:
+	break;
+    }
+  } catch (TMapDException& e) {
+    std::cerr << e.error_msg << std::endl;
+    return false;
+  } catch (TException& te) {
+    std::cerr << "Thrift error: " << te.what() << std::endl;
+    return false;
+  }
+  return true;
+}
+
+template <typename SERVICE_ENUM, typename CLIENT_CONTEXT>
+bool thrift_with_retry(SERVICE_ENUM which_service,
+                       CLIENT_CONTEXT& context) {
+  using TException = ::apache::thrift::TException;
+
+  try {
+    switch (which_service) {
+      case kDMSTATS:
+        context.client.dmstats(context.session);
+        break;
+      case kNODMSTATS:
+        context.client.nodmstats(context.session);
+        break;
       default:
 	break;
     }

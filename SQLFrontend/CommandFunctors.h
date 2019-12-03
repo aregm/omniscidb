@@ -260,6 +260,10 @@ StandardCommand(Help, {
                "<table>.<column> hot.\n";
   std::cout << "\\cool_column <table> <column> Set "
                "<table>.<column> cold.\n";
+  std::cout << "\\dmstats Start collecting "
+               "data manager statistics.\n";
+  std::cout << "\\nodmstats Stop collecting "
+               "data manager statistics.\n";
   std::cout << "\\q Quit.\n";
   std::cout.flush();
 });

@@ -340,18 +340,23 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     }
   }
   // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
+  //const auto max_hash_entry_count =
+  //    memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
+  //        ? static_cast<size_t>(std::numeric_limits<int32_t>::max() / sizeof(int32_t))
+  //        : static_cast<size_t>(std::numeric_limits<int32_t>::max());
+
   const auto max_hash_entry_count =
       memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
           ? static_cast<size_t>(std::numeric_limits<int32_t>::max() / sizeof(int32_t))
-          : static_cast<size_t>(std::numeric_limits<int32_t>::max());
+          : (static_cast<size_t>(std::numeric_limits<int32_t>::max()) * 4);
 
   auto bucketized_entry_count_info = get_bucketized_hash_entry_info(
       ti, col_range, qual_bin_oper->get_optype() == kBW_EQ);
   auto bucketized_entry_count = bucketized_entry_count_info.getNormalizedHashEntryCount();
 
-  if (bucketized_entry_count > max_hash_entry_count) {
-    throw TooManyHashEntries();
-  }
+//  if (bucketized_entry_count > max_hash_entry_count) {
+//    throw TooManyHashEntries();
+//  }
 
   if (qual_bin_oper->get_optype() == kBW_EQ &&
       col_range.getIntMax() >= std::numeric_limits<int64_t>::max()) {
@@ -487,10 +492,10 @@ void JoinHashTable::reify(const int device_count) {
   if (query_info.fragments.empty()) {
     return;
   }
-  if (query_info.getNumTuplesUpperBound() >
-      static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
-    throw TooManyHashEntries();
-  }
+  //if (query_info.getNumTuplesUpperBound() >
+  //    static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+  //  throw TooManyHashEntries();
+  //}
 #ifdef HAVE_CUDA
   gpu_hash_table_buff_.resize(device_count);
   gpu_hash_table_err_buff_.resize(device_count);

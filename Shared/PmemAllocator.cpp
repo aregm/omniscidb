@@ -46,7 +46,7 @@ AllocateSlabInPmem(void)
 						
 					left = __sync_fetch_and_sub(&numfreeslabs, 1);
 				
-					printf("%ld free slabs\n", left - 1);
+					//printf("%ld free slabs\n", left - 1);
 				
 					return (void *)((char *)base + slabsize * i);
 				}
@@ -91,7 +91,7 @@ FreeSlabInPmem(void *addr)
 {
 	size_t i;
 
-	printf("free slab %p\n", addr);
+	//printf("free slab %p\n", addr);
 
 	i = (((char *)addr - (char *)base) / slabsize);
 

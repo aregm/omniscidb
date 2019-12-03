@@ -34,6 +34,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <mutex>
 
 namespace File_Namespace {
 class FileBuffer;
@@ -115,6 +116,9 @@ class DataMgr {
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);
 
+  void startCollectingStatistics(void);
+  void stopCollectingStatistics(void);
+
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
 
   // database_id, table_id, column_id, fragment_id
@@ -133,9 +137,15 @@ class DataMgr {
   std::string dataDir_;
   bool hasGpus_;
   bool hasPmm_;
+  int profSF_;
   size_t reservedGpuMem_;
   std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>> chunkMutexMap_;
   mapd_shared_mutex chunkMutexMapMutex_;
+  std::map<ChunkKey, size_t> chunkFetchStats_;
+  std::map<ChunkKey, size_t> chunkFetchDataSizeStats_;
+  std::mutex chunkFetchStatsMutex_;
+  bool statisticsOn_;
+
 };
 }  // namespace Data_Namespace
 

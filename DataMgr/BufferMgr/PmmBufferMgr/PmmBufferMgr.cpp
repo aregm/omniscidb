@@ -58,16 +58,16 @@ int IsToAllocateInDram(size_t size) {
 
 void PmmBufferMgr::addSlab(const size_t slabSize) {
   slabs_.resize(slabs_.size() + 1);
-  printf("add slab %ld\n", slabSize);
+  //printf("add slab %ld\n", slabSize);
   try {
   
 			  void *p;
 
-			  printf("allocat slab on pmem\n");
+			  //printf("allocat slab on pmem\n");
 			  //p = memkind_malloc(pmem_kind, slabSize);
 			  p = AllocateSlabInPmem();
 		  
-			  printf("slab=%p\n", p);
+			  printf("add slab on pmem =%p\n", p);
 			  if (p == NULL) {
 				  printf("Out of pmem\n");
 				  throw std::bad_alloc();

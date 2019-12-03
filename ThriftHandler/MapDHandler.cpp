@@ -5640,6 +5640,18 @@ bool MapDHandler::cool_column(const TSessionId& session,
   return true;
 }
 
+void MapDHandler::dmstats(const TSessionId& session) {
+  auto session_info = get_session_copy(session);
+  auto& cat = session_info.getCatalog();
+  cat.getDataMgr().startCollectingStatistics();  
+}
+
+void MapDHandler::nodmstats(const TSessionId& session) {
+  auto session_info = get_session_copy(session);
+  auto& cat = session_info.getCatalog();
+  cat.getDataMgr().stopCollectingStatistics();  
+}
+
 void MapDHandler::shutdown() {
   if (calcite_) {
     calcite_->close_calcite_server();

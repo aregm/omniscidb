@@ -19,6 +19,7 @@
  * @author Todd Mostak <todd@mapd.com>
  */
 
+#include "Catalog/SysCatalog.h"
 #include "DataMgr.h"
 #include "../CudaMgr/CudaMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
@@ -42,6 +43,7 @@
 using namespace std;
 using namespace Buffer_Namespace;
 using namespace File_Namespace;
+using namespace Catalog_Namespace;
 
 size_t GetMaxPmemBufferSize(void);
 
@@ -69,18 +71,100 @@ DataMgr::DataMgr(const string& dataDir,
   }
 
   hasPmm_ = false;
+  profSF_ = 1;
   if (pmm) {
 	  if (InitializePmem(mapd_parameters.pmm_buffer_mem_bytes, (1L << 32)) == 0) {
 	    hasPmm_ = true;
+	    profSF_ = mapd_parameters.prof_scale_factor;
 	    printf("Use AppDirect\n");
 	  }
   }
+
+  statisticsOn_ = false;
 
   populateMgrs(mapd_parameters, numReaderThreads);
   createTopLevelMetadata();
 }
 
+void
+DataMgr::startCollectingStatistics(void)
+{
+	std::unique_lock<std::mutex> chunkFetchStatsLock(chunkFetchStatsMutex_);
+	// reset current database or all databases?
+	SysCatalog::instance().clearDataMgrStatistics();
+	statisticsOn_ = true;
+	chunkFetchStatsLock.unlock();
+
+	std::cout << "Data manager statistics on." << std::endl;
+}
+
+void
+DataMgr::stopCollectingStatistics(void)
+{
+
+	std::map<std::vector<int>, size_t> columnFetchStats;
+	std::map<std::vector<int>, size_t> columnChunkStats;
+	std::map<std::vector<int>, size_t> columnFetchDataSizeStats;
+
+	std::unique_lock<std::mutex> chunkFetchStatsLock(chunkFetchStatsMutex_);
+
+	if (statisticsOn_) {
+		// aggrgate chunk fetch stats by columns
+		std::map<std::vector<int>, size_t>::const_iterator it;
+		for (it = chunkFetchStats_.begin(); it != chunkFetchStats_.end(); ++it) {
+			std::vector<int> key;
+
+			key = it->first;
+			key.pop_back();
+
+			std::map<std::vector<int>, size_t>::iterator it2;
+		
+			it2 = columnFetchStats.find(key);
+			if (it2 != columnFetchStats.end()) {
+				it2->second += it->second;
+				columnChunkStats[key] += 1;
+				columnFetchDataSizeStats[key] += (chunkFetchDataSizeStats_[it->first] * profSF_);
+			}
+			else {
+				columnFetchStats[key] = it->second;
+				columnChunkStats[key] = 1;
+				columnFetchDataSizeStats[key] = chunkFetchDataSizeStats_[it->first] * profSF_;
+			}
+		}
+
+	
+		SysCatalog::instance().storeDataMgrStatistics(columnFetchStats,  columnChunkStats, columnFetchDataSizeStats);
+
+#if 0
+		for (std::map<std::vector<int>, size_t>::const_iterator it2 = columnFetchStats.begin(); it2 != columnFetchStats.end(); ++it2) {
+			for (std::vector<int>::const_iterator it3 = (it2->first).begin(); it3 != (it2->first).end(); it3++) {
+		
+				std::cout << " " << *it3;
+			}
+		
+			std::cout << " " << it2->second;
+
+			std::cout << " " << columnChunkStats[it2->first];
+		        std::cout << " " << columnFetchDataSizeStats[it2->first];
+		        std::cout << std::endl;
+		}
+#endif /* 0 */
+
+		chunkFetchStats_.clear();
+		chunkFetchDataSizeStats_.clear();
+
+		statisticsOn_ = false;
+	}
+	chunkFetchStatsLock.unlock();
+
+	std::cout << "Data manager statistics off." << std::endl;
+
+}
+
 DataMgr::~DataMgr() {
+
+	stopCollectingStatistics();
+
   int numLevels = bufferMgrs_.size();
   for (int level = numLevels - 1; level >= 0; --level) {
     for (size_t device = 0; device < bufferMgrs_[level].size(); device++) {
@@ -421,6 +505,34 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
                                         const MemoryLevel memoryLevel,
                                         const int deviceId,
                                         const size_t numBytes) {
+
+	if (numBytes > 0) {
+		std::unique_lock<std::mutex> chunkFetchStatsLock(chunkFetchStatsMutex_);
+
+		if (statisticsOn_) {
+			auto it = chunkFetchStats_.find(key);
+			if (it != chunkFetchStats_.end()) {
+				(it->second)++;
+				chunkFetchDataSizeStats_[key] += numBytes;
+			}
+			else {
+				chunkFetchStats_[key] = 1;
+				chunkFetchDataSizeStats_[key] = numBytes;
+			}
+
+			//std::cout << "getChunkBuffer: numBytes = " << numBytes << std::endl;
+	
+			//for (std::vector<int>::const_iterator it2 = key.begin() ; it2 != key.end(); ++it2)
+			//     std::cout << ' ' << *it2;
+	
+			//std::cout << " " << chunkFetchStats_[key];
+	
+			//std::cout << std::endl;
+		}
+	
+		chunkFetchStatsLock.unlock();
+	}
+
   auto level = static_cast<size_t>(memoryLevel);
 
   assert(level < levelSizes_.size());     // make sure we have a legit buffermgr

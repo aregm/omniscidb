@@ -33,7 +33,7 @@ std::shared_ptr<Chunk> Chunk::getChunk(const ColumnDescriptor* cd,
                                        const size_t numBytes,
                                        const size_t numElems) {
   std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd));
-  if ((memoryLevel == CPU_LEVEL) && (cd->isHotCol != true)) {
+  if ((memoryLevel == CPU_LEVEL) && (cd->isHotCol != true) && (cd->isSoftHotCol != true)) {
 	  chunkp->getChunkBuffer(data_mgr, key, PMM_LEVEL, deviceId, numBytes, numElems);
   }
   else {

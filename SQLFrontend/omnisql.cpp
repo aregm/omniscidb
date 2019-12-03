@@ -101,6 +101,24 @@ void set_column_cold(ClientContext& context, char const *table, char const *colu
 	}	
 }
 
+void dmstats(ClientContext& context) {
+	if (!thrift_with_retry(kDMSTATS, context)) {
+		std::cout << "Failed to start collecting data manager statistics." << std::endl;
+	}	
+	else {
+		std::cout << "Data manager statistics on." << std::endl;
+	}
+}
+
+void nodmstats(ClientContext& context) {
+	if (!thrift_with_retry(kNODMSTATS, context)) {
+		std::cout << "Failed to stop collecting data manager statistics." << std::endl;
+	}	
+	else {
+		std::cout << "Data manager statistics off." << std::endl;
+	}
+}
+
 void copy_table(char const* filepath, char const* table, ClientContext& context) {
   if (context.session == INVALID_SESSION_ID) {
     std::cerr << "Not connected to any databases." << std::endl;
@@ -1473,6 +1491,8 @@ int main(int argc, char** argv) {
         ( "\\db", 1, 2, SwitchDatabaseCmd<>( context ), "Usage: \\db [database|...]" )
         ( "\\heat_column", 3, 3, [&](Params const& p) { set_column_hot(context, p[1].c_str(), p[2].c_str() ); } )
         ( "\\cool_column", 3, 3, [&](Params const& p) { set_column_cold(context, p[1].c_str(), p[2].c_str() ); } )
+        ( "\\dmstats", 1, 1, [&](Params const& p) { dmstats(context); } )
+        ( "\\nodmstats", 1, 1, [&](Params const& p) { nodmstats(context); } )
         .is_resolved();
 
       if (resolution_status == false) {

@@ -303,6 +303,10 @@ void MapDProgramOptions::fillOptions() {
       "pmm",
       po::value<bool>(&pmm)->default_value(pmm)->implicit_value(true),
       "Use Intel(R) Optane DCPMM in AppDirect mode.");
+  help_desc.add_options()("profile-scale-factor",
+                          po::value<int>(&mapd_parameters.prof_scale_factor)
+                              ->default_value(mapd_parameters.prof_scale_factor),
+                          "Workload profile scale factor");
   help_desc.add_options()("cuda-block-size",
                           po::value<size_t>(&mapd_parameters.cuda_block_size)
                               ->default_value(mapd_parameters.cuda_block_size),

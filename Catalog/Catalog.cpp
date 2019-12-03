@@ -59,6 +59,8 @@
 #include "RWLocks.h"
 #include "SharedDictionaryValidator.h"
 
+#include <sys/sysinfo.h>
+
 using Chunk_NS::Chunk;
 using Fragmenter_Namespace::InsertOrderFragmenter;
 using Fragmenter_Namespace::SortedOrderFragmenter;
@@ -821,6 +823,7 @@ std::string getUserFromId(const int32_t id) {
 }
 }  // namespace
 
+
 void Catalog::buildMaps() {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
@@ -882,12 +885,19 @@ void Catalog::buildMaps() {
   string columnQuery(
       "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, "
       "is_notnull, compression, comp_param, "
-      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol, is_hotcol from "
+      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol, is_hotcol, is_softhotcol, bufs_fetched, unique_chunks_fetched, data_fetched from "
       "mapd_columns ORDER BY tableid, "
       "columnid");
   sqliteConnector_.query(columnQuery);
   numRows = sqliteConnector_.getNumRows();
   int32_t skip_physical_cols = 0;
+
+  //AppDirect
+  typedef std::tuple<float, size_t> ColumnFetchIdKey;
+  typedef std::multimap<ColumnFetchIdKey, ColumnDescriptor *> ColumnDescriptorMapByFetchId;
+
+  ColumnDescriptorMapByFetchId columnDescriptorMapByFetchId;
+
   for (size_t r = 0; r < numRows; ++r) {
     ColumnDescriptor* cd = new ColumnDescriptor();
     cd->tableId = sqliteConnector_.getData<int>(r, 0);
@@ -907,11 +917,19 @@ void Catalog::buildMaps() {
     cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
     cd->isDeletedCol = sqliteConnector_.getData<bool>(r, 15);
     cd->isHotCol = sqliteConnector_.getData<bool>(r, 16);
+    cd->isSoftHotCol = sqliteConnector_.getData<bool>(r, 17);
+    cd->chunkBufsFetched = sqliteConnector_.getData<size_t>(r, 18);
+    cd->uniqueChunksFetched = sqliteConnector_.getData<size_t>(r, 19);
+    cd->chunkDataFetched = sqliteConnector_.getData<size_t>(r, 20);
     cd->isGeoPhyCol = skip_physical_cols > 0;
     ColumnKey columnKey(cd->tableId, to_upper(cd->columnName));
     columnDescriptorMap_[columnKey] = cd;
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
     columnDescriptorMapById_[columnIdKey] = cd;
+
+    //Appdirect
+    ColumnFetchIdKey columnFetchIdKey((cd->uniqueChunksFetched ? ((cd->chunkBufsFetched * 1.0) / cd->uniqueChunksFetched) : 0.0), cd->chunkDataFetched);
+    columnDescriptorMapByFetchId.insert(std::pair<ColumnFetchIdKey, ColumnDescriptor *>(columnFetchIdKey, cd));
 
     if (skip_physical_cols <= 0) {
       skip_physical_cols = cd->columnType.get_physical_cols();
@@ -927,6 +945,53 @@ void Catalog::buildMaps() {
       tableDescriptorMapById_[cd->tableId]->columnIdBySpi_.push_back(cd->columnId);
     }
   }
+
+  // AppDirect: determine hotness of each column
+  size_t totalBytes = 0;
+  size_t highWaterMark;
+  //struct sysinfo info;
+
+  //std::cout<< "_SC_AVPHYS_PAGES: " << sysconf(_SC_AVPHYS_PAGES) << " _SC_PHYS_PAGES: " << sysconf(_SC_PHYS_PAGES) << " _SC_PAGE_SIZE: " << sysconf(_SC_PAGE_SIZE) << std::endl;
+
+  //if (sysinfo(&info)) {
+//	  highWaterMark = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGE_SIZE) * 4 / 5; // 80 percent of total DRAM
+  //}
+  //else {
+//	  std::cout << "mem_unit: " << info.mem_unit << " freehigh: " << info.freehigh << " totalram: " << info.totalram << " freeram: " << info.freeram << " totalhigh: " << info.totalhigh << " bufferram: " << info.bufferram << std::endl;
+
+//	  highWaterMark = info.freeram * info.mem_unit * 4 / 5;  // 80 percent of free memory
+ // }
+
+  highWaterMark = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGE_SIZE) * 4 / 5; // 80 percent of total DRAM
+  std::cout << "High water mark = " << highWaterMark << std::endl;
+  // find hard hot columns first
+  for (ColumnDescriptorMapByFetchId::reverse_iterator rit = columnDescriptorMapByFetchId.rbegin(); rit != columnDescriptorMapByFetchId.rend(); ++rit) {
+	  //std::cout << std::get<0>(rit->first) << " " << std::get<1>(rit->first) << " " << rit->second->columnName << std::endl;
+	  if (rit->second->isHotCol) {
+		  if (std::get<0>(rit->first)) {
+			  totalBytes += (std::get<1>(rit->first) / std::get<0>(rit->first));
+		  }
+	  }
+  }
+
+  for (ColumnDescriptorMapByFetchId::reverse_iterator rit = columnDescriptorMapByFetchId.rbegin(); rit != columnDescriptorMapByFetchId.rend(); ++rit) {
+	  if (rit->second->isHotCol || (std::get<0>(rit->first) == 0))
+		  continue;
+	  
+	  size_t estimatedColumnSize = (std::get<1>(rit->first) / std::get<0>(rit->first));
+
+	  if (totalBytes + estimatedColumnSize <= highWaterMark) {
+		  totalBytes += estimatedColumnSize;
+		  rit->second->isSoftHotCol = true;
+
+		  //std::cout << "column " << rit->second->columnName << " set to soft hot" << std::endl;
+	  }
+	  else  {
+		  break;
+	  }
+  }
+
+
   // sort columnIdBySpi_ based on columnId
   for (auto& tit : tableDescriptorMapById_) {
     std::sort(tit.second->columnIdBySpi_.begin(),
@@ -1670,12 +1735,12 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
       "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, "
       "colscale, is_notnull, "
       "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, "
-      "is_deletedcol, is_hotcol) "
+      "is_deletedcol, is_hotcol, is_softhotcol, bufs_fetched, unique_chunks_fetched, data_fetched) "
       "VALUES (?, "
       "(SELECT max(columnid) + 1 FROM mapd_columns WHERE tableid = ?), "
       "?, ?, ?, "
       "?, "
-      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       std::vector<std::string>{std::to_string(td.tableId),
                                std::to_string(td.tableId),
                                cd.columnName,
@@ -1692,7 +1757,11 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
                                std::to_string(cd.isVirtualCol),
                                cd.virtualExpr,
                                std::to_string(cd.isDeletedCol),
-                               std::to_string(cd.isHotCol)});
+                               std::to_string(cd.isHotCol),
+                               std::to_string(cd.isSoftHotCol),
+                               std::to_string(cd.chunkBufsFetched),
+                               std::to_string(cd.uniqueChunksFetched),
+                               std::to_string(cd.chunkDataFetched)});
 
   sqliteConnector_.query_with_text_params(
       "UPDATE mapd_tables SET ncolumns = ncolumns + 1 WHERE tableid = ?",
@@ -2007,10 +2076,10 @@ void Catalog::createTable(
             "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, "
             "coldim, colscale, is_notnull, "
             "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, "
-            "virtual_expr, is_deletedcol, is_hotcol) "
+            "virtual_expr, is_deletedcol, is_hotcol, is_softhotcol, bufs_fetched, unique_chunks_fetched, data_fetched) "
             "VALUES (?, ?, ?, ?, ?, "
             "?, "
-            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             std::vector<std::string>{std::to_string(td.tableId),
                                      std::to_string(colId),
                                      cd.columnName,
@@ -2027,7 +2096,11 @@ void Catalog::createTable(
                                      std::to_string(cd.isVirtualCol),
                                      cd.virtualExpr,
                                      std::to_string(cd.isDeletedCol),
-                                     std::to_string(cd.isHotCol)});
+                                     std::to_string(cd.isHotCol),
+                               std::to_string(cd.isSoftHotCol),
+                               std::to_string(cd.chunkBufsFetched),
+                               std::to_string(cd.uniqueChunksFetched),
+                               std::to_string(cd.chunkDataFetched)});
         cd.tableId = td.tableId;
         cd.columnId = colId++;
         cds.push_back(cd);
@@ -2697,6 +2770,47 @@ void Catalog::setColumnCold(const TableDescriptor* td, ColumnDescriptor* cd) {
   sqliteConnector_.query("END TRANSACTION");
 
   cd->isHotCol = false;
+}
+
+void Catalog::storeDataMgrStatistics(int tableId, int colId, size_t chunksFetched, size_t uniqueChunksFetched, size_t chunkDataFetched)
+{
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+      sqliteConnector_.query_with_text_params(
+          "UPDATE mapd_columns SET bufs_fetched = ?, unique_chunks_fetched = ?, data_fetched = ? WHERE tableid = ? AND columnid = ?",
+          std::vector<std::string>{
+	  			   std::to_string(chunksFetched),
+	  			   std::to_string(uniqueChunksFetched),
+	  			   std::to_string(chunkDataFetched),
+	  			   std::to_string(tableId),
+                                   std::to_string(colId)});
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+
+void Catalog::clearDataMgrStatistics(void)
+{
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+      sqliteConnector_.query_with_text_params(
+          "UPDATE mapd_columns SET bufs_fetched = ?, unique_chunks_fetched = ?, data_fetched = ?",
+          std::vector<std::string>{
+	  			   std::to_string(0),
+	  			   std::to_string(0),
+	  			   std::to_string(0)});
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
 }
 
 int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
