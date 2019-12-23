@@ -86,6 +86,9 @@ InsertOrderFragmenter::InsertOrderFragmenter(
 InsertOrderFragmenter::~InsertOrderFragmenter() {}
 
 void InsertOrderFragmenter::getChunkMetadata() {
+
+	printf("InsertOrderFragmenter getChunkMetadata\n");
+
   if (defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     // memory-resident tables won't have anything on disk
     std::vector<std::pair<ChunkKey, ChunkMetadata>> chunk_metadata;
@@ -114,6 +117,8 @@ void InsertOrderFragmenter::getChunkMetadata() {
         fragmentInfoVec_.back().fragmentId = cur_fragment_id;
         fragmentInfoVec_.back().setPhysicalNumTuples(chunk_itr->second.numElements);
         numTuples_ += fragmentInfoVec_.back().getPhysicalNumTuples();
+	printf("numTuples = %ld\n", numTuples_);
+
         for (const auto level_size : dataMgr_->levelSizes_) {
           fragmentInfoVec_.back().deviceIds.push_back(cur_fragment_id % level_size);
         }
@@ -161,7 +166,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
       ChunkKey insertKey = chunkKeyPrefix_;  // database_id and table_id
       insertKey.push_back(colIt->first);     // column id
       insertKey.push_back(lastFragmentId);   // fragment id
-      colIt->second.getChunkBuffer(dataMgr_, insertKey, defaultInsertLevel_, deviceId);
+      colIt->second.getChunkBuffer(dataMgr_, insertKey, defaultInsertLevel_, deviceId, 0);
       auto varLenColInfoIt = varLenColInfo_.find(colIt->first);
       if (varLenColInfoIt != varLenColInfo_.end()) {
         varLenColInfoIt->second = colIt->second.get_buffer()->size();
@@ -262,7 +267,8 @@ void InsertOrderFragmenter::updateChunkStats(
                                              Data_Namespace::MemoryLevel::DISK_LEVEL,
                                              0,
                                              chunk_meta_it->second.numBytes,
-                                             chunk_meta_it->second.numElements);
+                                             chunk_meta_it->second.numElements,
+					     0);
       auto buf = chunk->get_buffer();
       CHECK(buf);
       auto encoder = buf->encoder.get();

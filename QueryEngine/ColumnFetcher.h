@@ -29,14 +29,16 @@ class ColumnFetcher {
       const Data_Namespace::MemoryLevel effective_mem_lvl,
       const int device_id,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-      ColumnCacheMap& column_cache);
+      ColumnCacheMap& column_cache,
+      const unsigned long query_id);
 
   static std::pair<const int8_t*, size_t> getAllColumnFragments(
       Executor* executor,
       const Analyzer::ColumnVar& hash_col,
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-      ColumnCacheMap& column_cache);
+      ColumnCacheMap& column_cache,
+      const unsigned long query_id);
 
   const int8_t* getOneTableColumnFragment(
       const int table_id,
@@ -46,14 +48,16 @@ class ColumnFetcher {
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
       const Data_Namespace::MemoryLevel memory_level,
-      const int device_id) const;
+      const int device_id,
+      const unsigned long query_id) const;
 
   const int8_t* getAllTableColumnFragments(
       const int table_id,
       const int col_id,
       const std::map<int, const TableFragments*>& all_tables_fragments,
       const Data_Namespace::MemoryLevel memory_level,
-      const int device_id) const;
+      const int device_id,
+      const unsigned long query_id) const;
 
   const int8_t* getResultSetColumn(const InputColDescriptor* col_desc,
                                    const Data_Namespace::MemoryLevel memory_level,

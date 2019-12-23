@@ -73,7 +73,7 @@ DataMgr::DataMgr(const string& dataDir,
   hasPmm_ = false;
   profSF_ = 1;
   if (pmm) {
-	  if (InitializePmem(mapd_parameters.pmm_buffer_mem_bytes, (1L << 32)) == 0) {
+	  if (InitializePmem((1L << 32)) == 0) {
 	    hasPmm_ = true;
 	    profSF_ = mapd_parameters.prof_scale_factor;
 	    printf("Use AppDirect\n");
@@ -91,16 +91,47 @@ DataMgr::startCollectingStatistics(void)
 {
 	std::unique_lock<std::mutex> chunkFetchStatsLock(chunkFetchStatsMutex_);
 	// reset current database or all databases?
-	SysCatalog::instance().clearDataMgrStatistics();
+	SysCatalog::instance().clearDataMgrStatistics(hasPmm_);
 	statisticsOn_ = true;
 	chunkFetchStatsLock.unlock();
 
 	std::cout << "Data manager statistics on." << std::endl;
 }
 
-void
-DataMgr::stopCollectingStatistics(void)
+size_t
+DataMgr::getPeakVmSize(void)
 {
+	FILE *fp;
+	char statusFileName[256];
+
+	sprintf(statusFileName, "/proc/%d/status", getpid());
+	fp = fopen(statusFileName, "r");
+	if (fp == NULL) {
+		printf("Cannot get peak vm size\n");
+		return 0;
+	}
+
+
+	char token[128];
+	size_t peakVmSize;
+	while (!feof(fp)) {
+		fscanf(fp, "%s", token);
+		if (strcmp(token, "VmPeak:") == 0) {
+			fscanf(fp, "%lu", &peakVmSize);
+			fclose(fp);
+			return peakVmSize * 1024;
+		}
+	}
+	return 0;
+}
+
+void
+DataMgr::stopCollectingStatistics(std::map<unsigned long, long>& query_time)
+{
+
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchStats;
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnChunkStats;
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchDataSizeStats;
 
 	std::map<std::vector<int>, size_t> columnFetchStats;
 	std::map<std::vector<int>, size_t> columnChunkStats;
@@ -109,31 +140,64 @@ DataMgr::stopCollectingStatistics(void)
 	std::unique_lock<std::mutex> chunkFetchStatsLock(chunkFetchStatsMutex_);
 
 	if (statisticsOn_) {
-		// aggrgate chunk fetch stats by columns
-		std::map<std::vector<int>, size_t>::const_iterator it;
-		for (it = chunkFetchStats_.begin(); it != chunkFetchStats_.end(); ++it) {
-			std::vector<int> key;
+		for (std::map<unsigned long, std::map<std::vector<int>, size_t>>::const_iterator itmom = chunkFetchStats_.begin(); itmom != chunkFetchStats_.end(); itmom++) {
+			// aggrgate chunk fetch stats by columns
+			std::map<std::vector<int>, size_t> queryColumns;
+			std::map<std::vector<int>, size_t> queryChunks;
+			std::map<std::vector<int>, size_t> queryData;
 
-			key = it->first;
-			key.pop_back();
+			unsigned long query_id = itmom->first;
+			queryColumnFetchStats[query_id] = queryColumns;
+			queryColumnChunkStats[query_id] = queryChunks;
+			queryColumnFetchDataSizeStats[query_id] = queryData;
 
-			std::map<std::vector<int>, size_t>::iterator it2;
+
+			std::map<std::vector<int>, size_t>::const_iterator itm;
+			for (itm = itmom->second.begin(); itm != itmom->second.end(); ++itm) {
+				std::vector<int> key;
+
+				key = itm->first;
+				key.pop_back();		
+
+				std::map<std::vector<int>, size_t>::iterator itm2;
 		
-			it2 = columnFetchStats.find(key);
-			if (it2 != columnFetchStats.end()) {
-				it2->second += it->second;
-				columnChunkStats[key] += 1;
-				columnFetchDataSizeStats[key] += (chunkFetchDataSizeStats_[it->first] * profSF_);
-			}
-			else {
-				columnFetchStats[key] = it->second;
-				columnChunkStats[key] = 1;
-				columnFetchDataSizeStats[key] = chunkFetchDataSizeStats_[it->first] * profSF_;
+				itm2 = columnFetchStats.find(key);
+				if (itm2 != columnFetchStats.end()) {
+					itm2->second += itm->second;
+					columnChunkStats[key] += 1;
+					columnFetchDataSizeStats[key] += (chunkFetchDataSizeStats_[query_id][itm->first] * profSF_);
+				}
+				else {
+					columnFetchStats[key] = itm->second;
+					columnChunkStats[key] = 1;
+					columnFetchDataSizeStats[key] = chunkFetchDataSizeStats_[query_id][itm->first] * profSF_;
+				}
+
+				std::map<unsigned long, std::map<std::vector<int>, size_t>>::iterator itmom2;
+				itmom2 = queryColumnFetchStats.find(query_id);
+				itm2 = itmom2->second.find(key);
+				if (itm2 != itmom2->second.end()) {
+					itm2->second += itm->second;
+					queryColumnChunkStats[query_id][key] += 1;
+					queryColumnFetchDataSizeStats[query_id][key] += (chunkFetchDataSizeStats_[query_id][itm->first] * profSF_);
+			
+				}
+				else {
+					queryColumnFetchStats[query_id][key] = itm->second;
+					queryColumnChunkStats[query_id][key] = 1;
+					queryColumnFetchDataSizeStats[query_id][key] = chunkFetchDataSizeStats_[query_id][itm->first] * profSF_;
+				}
 			}
 		}
 
 	
-		SysCatalog::instance().storeDataMgrStatistics(columnFetchStats,  columnChunkStats, columnFetchDataSizeStats);
+		size_t peakWorkVmSize = 0;
+		if (hasPmm_) {
+			peakWorkVmSize = getPeakVmSize();
+			peakWorkVmSize -= GetMaxPmemBufferSize();
+		}
+	
+		SysCatalog::instance().storeDataMgrStatistics(hasPmm_, peakWorkVmSize, query_time, queryColumnFetchStats, queryColumnChunkStats, queryColumnFetchDataSizeStats, columnFetchStats,  columnChunkStats, columnFetchDataSizeStats);
 
 #if 0
 		for (std::map<std::vector<int>, size_t>::const_iterator it2 = columnFetchStats.begin(); it2 != columnFetchStats.end(); ++it2) {
@@ -159,11 +223,120 @@ DataMgr::stopCollectingStatistics(void)
 
 	std::cout << "Data manager statistics off." << std::endl;
 
+	EstimateDramRequired(100);
+}
+
+size_t
+DataMgr::EstimateDramRequired(int percentDramPerf)
+{
+	std::map<unsigned long, long> query_pmem_time;
+	std::map<unsigned long, long> query_dram_time;
+	std::vector<unsigned long> query_id_diff;
+	std::vector<long> query_time_diff;
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchStats2;
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnChunkStats2;
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchDataSizeStats2;
+	std::map<std::vector<int>, size_t> columnFetchStats2;
+	std::map<std::vector<int>, size_t> columnChunkStats2;
+	std::map<std::vector<int>, size_t> columnFetchDataSizeStats2;
+
+	size_t peakWorkVmSize;
+
+	if ((percentDramPerf > 100) || (percentDramPerf < 0)) {
+		std::cout << "Percentage of DRAM performance must be between 0 and 100, for example, 80." << std::endl;
+		return 0;
+	}
+	if (SysCatalog::instance().loadDataMgrStatistics(peakWorkVmSize, query_pmem_time, query_dram_time, query_id_diff, query_time_diff, queryColumnFetchStats2, queryColumnChunkStats2, queryColumnFetchDataSizeStats2, columnFetchStats2, columnChunkStats2, columnFetchDataSizeStats2)) {
+		std::cout << "query_pmem_time and query_dram_time do not have the same query ids" << std::endl;
+		return 0;
+	}
+
+	for (unsigned int i = 0; i < query_id_diff.size(); i++) {
+		std::cout << query_id_diff[i] << " " <<  query_time_diff[i] << std::endl;
+	}
+
+	long query_dram_time_total;
+	long query_pmem_time_total;
+
+	query_dram_time_total = 0;
+	for (std::map<unsigned long, long>::iterator it = query_dram_time.begin(); it != query_dram_time.end(); it++) {
+		query_dram_time_total += it->second;
+	}
+
+	query_pmem_time_total = 0;
+	for (std::map<unsigned long, long>::iterator it = query_pmem_time.begin(); it != query_pmem_time.end(); it++) {
+		query_pmem_time_total += it->second;
+	}
+
+	unsigned long hotcut = 0;
+	// (pmem_time - dram_time)/dram_time <= (100 - percentDramPerf)/100 ==>
+	// 100 * pmem_time <= (100 * dram_time + 100 * dram_time - percentDramPerf * dram_time ==>
+	// 100 * pmem_time <= (200 - percentDramPerf) * dram_time
+	while (query_pmem_time_total && query_dram_time_total && ((100 * query_pmem_time_total) > ((200 - percentDramPerf) * query_dram_time_total)) && (hotcut < query_time_diff.size())) {
+		query_pmem_time_total -= query_time_diff[hotcut];
+		hotcut++;
+	}
+
+	std::map<std::vector<int>, size_t> hotColumnFetchStats2;
+	std::map<std::vector<int>, size_t> hotColumnChunkStats2;
+	std::map<std::vector<int>, size_t> hotColumnFetchDataSizeStats2;
+
+	for (unsigned long i = 0; i < hotcut; i++) {
+		unsigned long query_id;
+
+		query_id = query_id_diff[i];
+		for (std::map<std::vector<int>, size_t>::iterator it = queryColumnFetchStats2[query_id].begin(); it != queryColumnFetchStats2[query_id].end(); it++) {
+			if (hotColumnFetchStats2.find(it->first) != hotColumnFetchStats2.end()) {
+				hotColumnFetchStats2[it->first] += it->second;
+				hotColumnChunkStats2[it->first] += queryColumnChunkStats2[query_id][it->first];
+				hotColumnFetchDataSizeStats2[it->first] += queryColumnFetchDataSizeStats2[query_id][it->first];
+			}
+			else {
+				hotColumnFetchStats2[it->first] = it->second;
+				hotColumnChunkStats2[it->first] = queryColumnChunkStats2[query_id][it->first];
+				hotColumnFetchDataSizeStats2[it->first] = queryColumnFetchDataSizeStats2[query_id][it->first];
+			}
+		}
+	}
+
+
+	size_t dramRequired = peakWorkVmSize;
+	for (std::map<std::vector<int>, size_t>::iterator it = hotColumnFetchStats2.begin(); it != hotColumnFetchStats2.end(); it++) {
+		size_t estimatedColumnSize;
+
+		estimatedColumnSize = hotColumnFetchDataSizeStats2[it->first] * hotColumnChunkStats2[it->first] * 1.0 / it->second;
+		dramRequired += estimatedColumnSize;
+	}
+
+	printf("Need %lu DRAM\n", dramRequired);
+
+	return dramRequired;
+
+#if 0
+	for (std::map<unsigned long, long>::const_iterator it = query_pmem_time.begin(); it != query_pmem_time.end(); ++it) {
+		std::cout << it->first << " " << it->second << std::endl;
+	}
+
+	for (std::map<unsigned long, long>::const_iterator it = query_dram_time.begin(); it != query_dram_time.end(); ++it) {
+		std::cout << it->first << " " << it->second << std::endl;
+	}
+
+	for (std::map<unsigned long, std::map<std::vector<int>, size_t>>::const_iterator it = queryColumnFetchStats2.begin(); it != queryColumnFetchStats2.end(); it++) {
+		std::cout << it->first << std::endl;
+		for (std::map<std::vector<int>, size_t>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++) {
+			std::cout << "		" << it2->first[0] << " " << it2->first[1] << " " << it2->first[2] << " " << it2->second << " " << queryColumnChunkStats2[it->first][it2->first] << " " << queryColumnFetchDataSizeStats2[it->first][it2->first] << std::endl;
+		}
+	}
+#endif /* 0 */
+
 }
 
 DataMgr::~DataMgr() {
 
-	stopCollectingStatistics();
+	//stopCollectingStatistics();
+
+		chunkFetchStats_.clear();
+		chunkFetchDataSizeStats_.clear();
 
   int numLevels = bufferMgrs_.size();
   for (int level = numLevels - 1; level >= 0; --level) {
@@ -489,6 +662,7 @@ void DataMgr::getChunkMetadataVec(
 void DataMgr::getChunkMetadataVecForKeyPrefix(
     std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
     const ChunkKey& keyPrefix) {
+	printf("DataMgr getChunkMetadataVecForKeyPrefix\n");
   bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, keyPrefix);
 }
 
@@ -504,20 +678,38 @@ AbstractBuffer* DataMgr::createChunkBuffer(const ChunkKey& key,
 AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
                                         const MemoryLevel memoryLevel,
                                         const int deviceId,
-                                        const size_t numBytes) {
+                                        const size_t numBytes,
+					const unsigned long query_id) {
 
-	if (numBytes > 0) {
+	//std::cout << "thread " << std::this_thread::get_id() << " getChunkBuffer for query " << query_id << " " << numBytes << std::endl;
+
+	//for (std::vector<int>::const_iterator it2 = key.begin() ; it2 != key.end(); ++it2)
+	 //    std::cout << ' ' << *it2;
+	//std::cout << std::endl;
+
+	if ((numBytes > 0) && (query_id != 0)) {
 		std::unique_lock<std::mutex> chunkFetchStatsLock(chunkFetchStatsMutex_);
 
 		if (statisticsOn_) {
-			auto it = chunkFetchStats_.find(key);
-			if (it != chunkFetchStats_.end()) {
-				(it->second)++;
-				chunkFetchDataSizeStats_[key] += numBytes;
+			std::map<unsigned long, std::map<ChunkKey, size_t>>::iterator it;
+			
+			it = chunkFetchStats_.find(query_id);
+			if (it == chunkFetchStats_.end()) {
+				std::map<ChunkKey, size_t> queryChunkStats;
+				std::map<ChunkKey, size_t> queryDataStats;
+
+				chunkFetchStats_[query_id] = queryChunkStats;
+				chunkFetchDataSizeStats_[query_id] = queryDataStats;
+			}
+
+			auto it2 = chunkFetchStats_[query_id].find(key);
+			if (it2 != chunkFetchStats_[query_id].end()) {
+				(it2->second)++;
+				chunkFetchDataSizeStats_[query_id][key] += numBytes;
 			}
 			else {
-				chunkFetchStats_[key] = 1;
-				chunkFetchDataSizeStats_[key] = numBytes;
+				chunkFetchStats_[query_id][key] = 1;
+				chunkFetchDataSizeStats_[query_id][key] = numBytes;
 			}
 
 			//std::cout << "getChunkBuffer: numBytes = " << numBytes << std::endl;

@@ -537,7 +537,7 @@ class MapDHandler : public MapDIf {
       const bool just_validate,
       const bool find_push_down_candidates,
       const bool just_calcite_explain,
-      const bool explain_optimized_ir) const;
+      const bool explain_optimized_ir);
 
   void execute_rel_alg_with_filter_push_down(
       TQueryResult& _return,
@@ -672,6 +672,8 @@ class MapDHandler : public MapDIf {
   std::string _geo_copy_from_file_name;
   Importer_NS::CopyParams _geo_copy_from_copy_params;
   std::string _geo_copy_from_partitions;
+
+  std::map<unsigned long, long> _query_time;
 
   // Only for IPC device memory deallocation
   mutable std::mutex handle_to_dev_ptr_mutex_;

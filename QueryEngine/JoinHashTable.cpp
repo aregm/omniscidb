@@ -306,7 +306,8 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const HashType preferred_hash_type,
     const int device_count,
     ColumnCacheMap& column_cache,
-    Executor* executor) {
+    Executor* executor,
+    const ExecutionOptions& eo) {
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
   const auto cols =
       get_cols(qual_bin_oper.get(), *executor->getCatalog(), executor->temporary_tables_);
@@ -374,7 +375,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
                                                        executor,
                                                        device_count));
   try {
-    join_hash_table->reify(device_count);
+    join_hash_table->reify(device_count, eo);
   } catch (const TableMustBeReplicated& e) {
     // Throw a runtime error to abort the query
     join_hash_table->freeHashBufferMemory();
@@ -406,20 +407,23 @@ std::pair<const int8_t*, size_t> JoinHashTable::getOneColumnFragment(
     const Fragmenter_Namespace::FragmentInfo& fragment,
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
-    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+    const unsigned long query_id) {
   return ColumnFetcher::getOneColumnFragment(executor_,
                                              hash_col,
                                              fragment,
                                              effective_mem_lvl,
                                              device_id,
                                              chunks_owner,
-                                             column_cache_);
+                                             column_cache_,
+					     query_id);
 }
 
 std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
     const Analyzer::ColumnVar& hash_col,
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+    unsigned long query_id) {
   std::lock_guard<std::mutex> linearized_multifrag_column_lock(
       linearized_multifrag_column_mutex_);
   if (linearized_multifrag_column_.first) {
@@ -428,7 +432,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
   const int8_t* col_buff;
   size_t total_elem_count;
   std::tie(col_buff, total_elem_count) = ColumnFetcher::getAllColumnFragments(
-      executor_, hash_col, fragments, chunks_owner, column_cache_);
+      executor_, hash_col, fragments, chunks_owner, column_cache_, query_id);
   linearized_multifrag_column_owner_.addColBuffer(col_buff);
   if (!shardCount()) {
     linearized_multifrag_column_ = {col_buff, total_elem_count};
@@ -482,7 +486,7 @@ std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
   return shards_for_device;
 }
 
-void JoinHashTable::reify(const int device_count) {
+void JoinHashTable::reify(const int device_count, const ExecutionOptions& eo) {
   CHECK_LT(0, device_count);
   const auto& catalog = *executor_->getCatalog();
   const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
@@ -516,7 +520,8 @@ void JoinHashTable::reify(const int device_count) {
                          : &JoinHashTable::reifyOneToManyForDevice,
                      this,
                      fragments,
-                     device_id));
+                     device_id,
+		     eo));
     }
     for (auto& init_thread : init_threads) {
       init_thread.wait();
@@ -539,7 +544,8 @@ void JoinHashTable::reify(const int device_count) {
                                         &JoinHashTable::reifyOneToManyForDevice,
                                         this,
                                         fragments,
-                                        device_id));
+                                        device_id,
+					eo));
     }
     for (auto& init_thread : init_threads) {
       init_thread.wait();
@@ -556,7 +562,8 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-    ThrustAllocator& dev_buff_owner) {
+    ThrustAllocator& dev_buff_owner,
+    const ExecutionOptions& eo) {
   static std::mutex fragment_fetch_mutex;
   const bool has_multi_frag = fragment_info.size() > 1;
   const auto& catalog = *executor_->getCatalog();
@@ -568,7 +575,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
   const size_t elem_width = hash_col->get_type_info().get_size();
   if (has_multi_frag) {
     std::tie(col_buff, elem_count) =
-        getAllColumnFragments(*hash_col, fragment_info, chunks_owner);
+        getAllColumnFragments(*hash_col, fragment_info, chunks_owner, eo.query_id);
   }
 
   {
@@ -588,7 +595,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
       }
     } else {
       std::tie(col_buff, elem_count) = getOneColumnFragment(
-          *hash_col, first_frag, effective_memory_level, device_id, chunks_owner);
+          *hash_col, first_frag, effective_memory_level, device_id, chunks_owner, eo.query_id);
     }
   }
   return {col_buff, elem_count};
@@ -621,7 +628,8 @@ ChunkKey JoinHashTable::genHashTableKey(
 
 void JoinHashTable::reifyOneToOneForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-    const int device_id) {
+    const int device_id,
+    const ExecutionOptions& eo) {
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.getDataMgr();
   const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
@@ -657,7 +665,8 @@ void JoinHashTable::reifyOneToOneForDevice(
                                                   effective_memory_level,
                                                   device_id,
                                                   chunks_owner,
-                                                  dev_buff_owner);
+                                                  dev_buff_owner,
+						  eo);
 
   initHashTableForDevice(genHashTableKey(fragments, cols.second, inner_col),
                          col_buff,
@@ -669,7 +678,8 @@ void JoinHashTable::reifyOneToOneForDevice(
 
 void JoinHashTable::reifyOneToManyForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-    const int device_id) {
+    const int device_id,
+    const ExecutionOptions& eo) {
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.getDataMgr();
   const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
@@ -704,7 +714,8 @@ void JoinHashTable::reifyOneToManyForDevice(
                                                   effective_memory_level,
                                                   device_id,
                                                   chunks_owner,
-                                                  dev_buff_owner);
+                                                  dev_buff_owner,
+						  eo);
 
   initOneToManyHashTable(genHashTableKey(fragments, cols.second, inner_col),
                          col_buff,

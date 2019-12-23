@@ -983,7 +983,8 @@ class Executor {
                           const FragmentsList& selected_fragments,
                           const Catalog_Namespace::Catalog&,
                           std::list<ChunkIter>&,
-                          std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
+                          std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
+			  const unsigned long query_id);
 
   std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
   getRowCountAndOffsetForAllFrags(
@@ -1121,7 +1122,8 @@ class Executor {
       const CompilationOptions& co,
       const std::vector<InputTableInfo>& query_infos,
       ColumnCacheMap& column_cache,
-      std::vector<std::string>& fail_reasons);
+      std::vector<std::string>& fail_reasons,
+      const ExecutionOptions& eo);
   llvm::Value* addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters,
                                    const size_t level_idx);
   void codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
@@ -1155,7 +1157,8 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const MemoryLevel memory_level,
       const JoinHashTableInterface::HashType preferred_hash_type,
-      ColumnCacheMap& column_cache);
+      ColumnCacheMap& column_cache,
+      const ExecutionOptions& eo);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,
                     const RelAlgExecutionUnit& ra_exe_unit);

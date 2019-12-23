@@ -99,7 +99,7 @@ inline CompilationOptions get_compilation_options(const ExecutorDeviceType& devi
 
 inline ExecutionOptions get_execution_options() {
   return ExecutionOptions{
-      false, false, false, false, false, false, false, false, 0, false, false, 0};
+      false, false, false, false, false, false, false, false, 0, false, false, 0, 0};
 }
 
 }  // namespace

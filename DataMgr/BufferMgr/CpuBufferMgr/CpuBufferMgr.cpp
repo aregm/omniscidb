@@ -60,10 +60,9 @@ int IsToAllocateInDram(size_t size) {
 
 void CpuBufferMgr::addSlab(const size_t slabSize) {
   slabs_.resize(slabs_.size() + 1);
-  printf("add slab %ld\n", slabSize);
   try {
-		  printf("allocat slab on dram\n");
-		  slabs_.back() = new int8_t[slabSize];
+//		  printf("allocat slab on dram\n");
+	  slabs_.back() = new int8_t[slabSize];
   } catch (std::bad_alloc&) {
     slabs_.resize(slabs_.size() - 1);
     throw FailedToCreateSlab(slabSize);
@@ -73,6 +72,7 @@ void CpuBufferMgr::addSlab(const size_t slabSize) {
 }
 
 void CpuBufferMgr::freeAllMem() {
+	printf("free all slabs in DRAM\n");
   for (auto bufIt = slabs_.begin(); bufIt != slabs_.end(); ++bufIt) {
 	  delete[] * bufIt;
   }

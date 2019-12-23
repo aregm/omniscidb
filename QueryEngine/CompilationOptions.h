@@ -45,6 +45,7 @@ struct ExecutionOptions {
   const bool find_push_down_candidates;
   const bool just_calcite_explain;
   const double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
+  const unsigned long query_id;		//ZMA: query id
 };
 
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H

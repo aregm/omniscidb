@@ -216,7 +216,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                                    co,
                                    query_infos,
                                    column_cache,
-                                   fail_reasons);
+                                   fail_reasons,
+				   eo);
     const auto found_outer_join_matches_cb =
         [this, level_idx](llvm::Value* found_outer_join_matches) {
           CHECK_LT(level_idx, cgen_state_->outer_join_match_found_per_level_.size());
@@ -376,7 +377,8 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
     const CompilationOptions& co,
     const std::vector<InputTableInfo>& query_infos,
     ColumnCacheMap& column_cache,
-    std::vector<std::string>& fail_reasons) {
+    std::vector<std::string>& fail_reasons,
+    const ExecutionOptions& eo) {
   if (current_level_join_conditions.type != JoinType::INNER &&
       current_level_join_conditions.quals.size() > 1) {
     fail_reasons.emplace_back("No equijoin expression found for outer join");
@@ -401,7 +403,8 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
           co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                      : MemoryLevel::CPU_LEVEL,
           JoinHashTableInterface::HashType::OneToOne,
-          column_cache);
+          column_cache,
+	  eo);
       current_level_hash_table = hash_table_or_error.hash_table;
     }
     if (hash_table_or_error.hash_table) {

@@ -77,18 +77,22 @@ class Chunk {
                       const MemoryLevel mem_level,
                       const int deviceId = 0,
                       const size_t num_bytes = 0,
-                      const size_t num_elems = 0);
+                      const size_t num_elems = 0,
+		      const unsigned long query_id = 0);
   static std::shared_ptr<Chunk> getChunk(const ColumnDescriptor* cd,
                                          DataMgr* data_mgr,
                                          const ChunkKey& key,
                                          const MemoryLevel mem_level,
                                          const int deviceId,
                                          const size_t num_bytes,
-                                         const size_t num_elems);
+                                         const size_t num_elems,
+					 const unsigned long query_id);
   bool isChunkOnDevice(DataMgr* data_mgr,
                        const ChunkKey& key,
                        const MemoryLevel mem_level,
                        const int device_id);
+
+  bool isMetaDataChunk(const ChunkKey& key);
 
   // protected:
   AbstractBuffer* get_buffer() const { return buffer; }

@@ -15,7 +15,7 @@
 size_t GetMaxPmemBufferSize(void);
 void *AllocateSlabInPmem(void);
 void FreeSlabInPmem(void *addr);
-int InitializePmem(size_t buffer_size, size_t slab_size);
+int InitializePmem(size_t slab_size);
 int IsPmem(void *addr);
 
 #endif /* PMEMALLOCATOR_H */

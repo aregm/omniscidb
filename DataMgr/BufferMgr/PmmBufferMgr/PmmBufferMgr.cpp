@@ -67,7 +67,7 @@ void PmmBufferMgr::addSlab(const size_t slabSize) {
 			  //p = memkind_malloc(pmem_kind, slabSize);
 			  p = AllocateSlabInPmem();
 		  
-			  printf("add slab on pmem =%p\n", p);
+//			  printf("add slab on pmem =%p\n", p);
 			  if (p == NULL) {
 				  printf("Out of pmem\n");
 				  throw std::bad_alloc();
@@ -85,6 +85,7 @@ void PmmBufferMgr::addSlab(const size_t slabSize) {
 }
 
 void PmmBufferMgr::freeAllMem() {
+	printf("free all slabs in PMM\n");
   for (auto bufIt = slabs_.begin(); bufIt != slabs_.end(); ++bufIt) {
 	  if (IsPmem(*bufIt)) {
 		  // invoke destructor

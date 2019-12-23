@@ -38,7 +38,8 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const HashType preferred_hash_type,
     const int device_count,
     ColumnCacheMap& column_cache,
-    Executor* executor) {
+    Executor* executor,
+    const ExecutionOptions& eo) {
   const auto& query_info =
       get_inner_query_info(getInnerTableId(condition.get(), executor), query_infos).info;
   const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
@@ -63,7 +64,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
   join_hash_table->checkHashJoinReplicationConstraint(
       getInnerTableId(condition.get(), executor));
   try {
-    join_hash_table->reify(device_count);
+    join_hash_table->reify(device_count, eo);
   } catch (const TableMustBeReplicated& e) {
     // Throw a runtime error to abort the query
     join_hash_table->freeHashBufferMemory();
@@ -175,7 +176,7 @@ BaselineJoinHashTable::CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyIn
   return {sd_inner_proxy_per_key, sd_outer_proxy_per_key, cache_key_chunks};
 }
 
-void BaselineJoinHashTable::reify(const int device_count) {
+void BaselineJoinHashTable::reify(const int device_count, const ExecutionOptions& eo) {
   CHECK_LT(0, device_count);
 #ifdef HAVE_CUDA
   gpu_hash_table_buff_.resize(device_count);
@@ -188,7 +189,7 @@ void BaselineJoinHashTable::reify(const int device_count) {
 
   if (condition_->is_overlaps_oper()) {
     try {
-      reifyWithLayout(device_count, JoinHashTableInterface::HashType::OneToMany);
+      reifyWithLayout(device_count, JoinHashTableInterface::HashType::OneToMany, eo);
       return;
     } catch (const std::exception& e) {
       VLOG(1) << "Caught exception while building overlaps baseline hash table: "
@@ -198,19 +199,20 @@ void BaselineJoinHashTable::reify(const int device_count) {
   }
 
   try {
-    reifyWithLayout(device_count, layout);
+    reifyWithLayout(device_count, layout, eo);
   } catch (const std::exception& e) {
     VLOG(1) << "Caught exception while building baseline hash table: " << e.what();
     freeHashBufferMemory();
     HashTypeCache::set(composite_key_info.cache_key_chunks,
                        JoinHashTableInterface::HashType::OneToMany);
-    reifyWithLayout(device_count, JoinHashTableInterface::HashType::OneToMany);
+    reifyWithLayout(device_count, JoinHashTableInterface::HashType::OneToMany, eo);
   }
 }
 
 void BaselineJoinHashTable::reifyWithLayout(
     const int device_count,
-    const JoinHashTableInterface::HashType layout) {
+    const JoinHashTableInterface::HashType layout,
+    const ExecutionOptions& eo) {
   layout_ = layout;
   const auto& query_info = get_inner_query_info(getInnerTableId(), query_infos_).info;
   if (query_info.fragments.empty()) {
@@ -223,7 +225,7 @@ void BaselineJoinHashTable::reifyWithLayout(
         shard_count
             ? only_shards_for_device(query_info.fragments, device_id, device_count)
             : query_info.fragments;
-    const auto columns_for_device = fetchColumnsForDevice(fragments, device_id);
+    const auto columns_for_device = fetchColumnsForDevice(fragments, device_id, eo);
     columns_per_device.push_back(columns_for_device);
   }
   if (layout == JoinHashTableInterface::HashType::OneToMany) {
@@ -247,7 +249,8 @@ void BaselineJoinHashTable::reifyWithLayout(
                                       this,
                                       columns_per_device[device_id],
                                       layout,
-                                      device_id));
+                                      device_id,
+				      eo));
   }
   for (auto& init_thread : init_threads) {
     init_thread.wait();
@@ -376,7 +379,8 @@ JoinColumn BaselineJoinHashTable::fetchColumn(
     const Data_Namespace::MemoryLevel& effective_memory_level,
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-    const int device_id) {
+    const int device_id,
+    const ExecutionOptions& eo) {
   static std::mutex fragment_fetch_mutex;
   const bool has_multi_frag = fragments.size() > 1;
   const auto& first_frag = fragments.front();
@@ -390,7 +394,7 @@ JoinColumn BaselineJoinHashTable::fetchColumn(
   if (has_multi_frag) {
     try {
       std::tie(col_buff, elem_count) =
-          getAllColumnFragments(*inner_col, fragments, chunks_owner);
+          getAllColumnFragments(*inner_col, fragments, chunks_owner, eo.query_id);
     } catch (...) {
       throw FailedToFetchColumn();
     }
@@ -419,7 +423,8 @@ JoinColumn BaselineJoinHashTable::fetchColumn(
                                                 effective_memory_level,
                                                 device_id,
                                                 chunks_owner,
-                                                column_cache_);
+                                                column_cache_,
+						eo.query_id);
       } catch (...) {
         throw FailedToFetchColumn();
       }
@@ -430,7 +435,8 @@ JoinColumn BaselineJoinHashTable::fetchColumn(
 
 BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-    const int device_id) {
+    const int device_id,
+    const ExecutionOptions& eo) {
   const auto& catalog = *executor_->getCatalog();
   const auto inner_outer_pairs =
       normalize_column_pairs(condition_.get(), catalog, executor_->getTemporaryTables());
@@ -448,7 +454,7 @@ BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDe
       throw FailedToJoinOnVirtualColumn();
     }
     join_columns.emplace_back(fetchColumn(
-        inner_col, effective_memory_level, fragments, chunks_owner, device_id));
+        inner_col, effective_memory_level, fragments, chunks_owner, device_id, eo));
     const auto& ti = inner_col->get_type_info();
     join_column_types.emplace_back(JoinColumnTypeInfo{static_cast<size_t>(ti.get_size()),
                                                       0,
@@ -463,7 +469,8 @@ BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDe
 
 void BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
                                            const JoinHashTableInterface::HashType layout,
-                                           const int device_id) {
+                                           const int device_id,
+					   const ExecutionOptions& eo) {
   const auto& catalog = *executor_->getCatalog();
   const auto inner_outer_pairs =
       normalize_column_pairs(condition_.get(), catalog, executor_->getTemporaryTables());
@@ -491,7 +498,8 @@ void BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_d
 std::pair<const int8_t*, size_t> BaselineJoinHashTable::getAllColumnFragments(
     const Analyzer::ColumnVar& hash_col,
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+    const unsigned long query_id) {
   std::lock_guard<std::mutex> linearized_multifrag_column_lock(
       linearized_multifrag_column_mutex_);
   auto linearized_column_cache_key =
@@ -503,7 +511,7 @@ std::pair<const int8_t*, size_t> BaselineJoinHashTable::getAllColumnFragments(
   const int8_t* col_buff;
   size_t total_elem_count;
   std::tie(col_buff, total_elem_count) = ColumnFetcher::getAllColumnFragments(
-      executor_, hash_col, fragments, chunks_owner, column_cache_);
+      executor_, hash_col, fragments, chunks_owner, column_cache_, query_id);
   linearized_multifrag_column_owner_.addColBuffer(col_buff);
   const auto shard_count = shardCount();
   if (!shard_count) {

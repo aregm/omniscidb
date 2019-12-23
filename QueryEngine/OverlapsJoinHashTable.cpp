@@ -31,7 +31,8 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
     ColumnCacheMap& column_map,
-    Executor* executor) {
+    Executor* executor,
+    const ExecutionOptions& eo) {
   const auto& query_info =
       get_inner_query_info(getInnerTableId(condition.get(), executor), query_infos).info;
   const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
@@ -54,7 +55,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
   join_hash_table->checkHashJoinReplicationConstraint(
       getInnerTableId(condition.get(), executor));
   try {
-    join_hash_table->reify(device_count);
+    join_hash_table->reify(device_count, eo);
   } catch (const HashJoinFail& e) {
     throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
                                    "involved in equijoin | ") +
@@ -71,7 +72,8 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
 
 void OverlapsJoinHashTable::reifyWithLayout(
     const int device_count,
-    const JoinHashTableInterface::HashType layout) {
+    const JoinHashTableInterface::HashType layout,
+    const ExecutionOptions& eo) {
   CHECK(layout == JoinHashTableInterface::HashType::OneToMany);
   layout_ = layout;
   const auto& query_info = get_inner_query_info(getInnerTableId(), query_infos_).info;
@@ -85,7 +87,7 @@ void OverlapsJoinHashTable::reifyWithLayout(
         shard_count
             ? only_shards_for_device(query_info.fragments, device_id, device_count)
             : query_info.fragments;
-    const auto columns_for_device = fetchColumnsForDevice(fragments, device_id);
+    const auto columns_for_device = fetchColumnsForDevice(fragments, device_id, eo);
     columns_per_device.push_back(columns_for_device);
   }
 
@@ -107,7 +109,8 @@ void OverlapsJoinHashTable::reifyWithLayout(
                                       this,
                                       columns_per_device[device_id],
                                       layout,
-                                      device_id));
+                                      device_id,
+				      eo));
   }
   for (auto& init_thread : init_threads) {
     init_thread.wait();
@@ -119,7 +122,8 @@ void OverlapsJoinHashTable::reifyWithLayout(
 
 BaselineJoinHashTable::ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-    const int device_id) {
+    const int device_id,
+    const ExecutionOptions& eo) {
   const auto& catalog = *executor_->getCatalog();
   const auto inner_outer_pairs =
       normalize_column_pairs(condition_.get(), catalog, executor_->getTemporaryTables());
@@ -137,7 +141,7 @@ BaselineJoinHashTable::ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDe
       throw FailedToJoinOnVirtualColumn();
     }
     const auto join_column_info = fetchColumn(
-        inner_col, effective_memory_level, fragments, chunks_owner, device_id);
+        inner_col, effective_memory_level, fragments, chunks_owner, device_id, eo);
     join_columns.emplace_back(
         JoinColumn{join_column_info.col_buff, join_column_info.num_elems});
     const auto& ti = inner_col->get_type_info();

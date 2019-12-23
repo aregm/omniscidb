@@ -128,7 +128,8 @@ vector<size_t> scan_table_return_hash(const string& table_name, const Catalog& c
                             CPU_LEVEL,
                             frag.deviceIds[static_cast<int>(CPU_LEVEL)],
                             chunk_meta_it->second.numBytes,
-                            chunk_meta_it->second.numElements);
+                            chunk_meta_it->second.numElements,
+			    0);
         scan_chunk(chunk_meta_it->second, *chunkp, col_hashs[i], true);
         // call Chunk destructor here
       });
@@ -166,7 +167,8 @@ vector<size_t> scan_table_return_hash_non_iter(const string& table_name,
                             CPU_LEVEL,
                             frag.deviceIds[static_cast<int>(CPU_LEVEL)],
                             chunk_meta_it->second.numBytes,
-                            chunk_meta_it->second.numElements);
+                            chunk_meta_it->second.numElements,
+			    0);
         scan_chunk(chunk_meta_it->second, *chunkp, col_hashs[i], false);
         // call Chunk destructor here
       });

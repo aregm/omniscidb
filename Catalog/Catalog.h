@@ -125,6 +125,7 @@ class Catalog {
   void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
   void removeChunks(const int table_id);
 
+  void setSoftHotColumns(void);
   void setColumnHot(const TableDescriptor *td, ColumnDescriptor *cd);
   void setColumnCold(const TableDescriptor *td, ColumnDescriptor *cd);
   void storeDataMgrStatistics(int tableId, int colId, size_t chunksFetched, size_t uniqueChunksFetched, size_t chunkDataFetched);

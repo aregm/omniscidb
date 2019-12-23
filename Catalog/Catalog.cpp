@@ -148,6 +148,7 @@ Catalog::Catalog(const string& basePath,
     CheckAndExecuteMigrations();
   }
   buildMaps();
+  setSoftHotColumns();
   if (!is_new_db) {
     CheckAndExecuteMigrationsPostBuildMaps();
   }
@@ -824,6 +825,93 @@ std::string getUserFromId(const int32_t id) {
 }  // namespace
 
 
+void
+Catalog::setSoftHotColumns(void)
+{
+	std::map<unsigned long, long> query_pmem_time;
+	std::map<unsigned long, long> query_dram_time;
+	std::vector<unsigned long> query_id_diff;
+	std::vector<long> query_time_diff;
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchStats2;
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnChunkStats2;
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchDataSizeStats2;
+	std::map<std::vector<int>, size_t> columnFetchStats2;
+	std::map<std::vector<int>, size_t> columnChunkStats2;
+	std::map<std::vector<int>, size_t> columnFetchDataSizeStats2;
+
+	size_t peakWorkVmSize;
+
+	if (SysCatalog::instance().loadDataMgrStatistics(peakWorkVmSize, query_pmem_time, query_dram_time, query_id_diff, query_time_diff, queryColumnFetchStats2, queryColumnChunkStats2, queryColumnFetchDataSizeStats2, columnFetchStats2, columnChunkStats2, columnFetchDataSizeStats2)) {
+		std::cout << "query_pmem_time and query_dram_time do not have the same query ids" << std::endl;
+		return;
+	}
+
+	if ((columnFetchStats2.size() == 0) || (columnChunkStats2.size() == 0) || (columnFetchDataSizeStats2.size() == 0)) {
+		std::cout << "Column data statistics are not available" << std::endl;
+		return;
+	}
+
+	for (unsigned int i = 0; i < query_id_diff.size(); i++) {
+		std::cout << query_id_diff[i] << " " <<  query_time_diff[i] << std::endl;
+	}
+
+	size_t totalBytes = peakWorkVmSize;
+	size_t highWaterMark;
+
+      	highWaterMark = sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGE_SIZE) * 4 / 5; // 80 percent of total DRAM
+      	std::cout << "High water mark = " << highWaterMark << std::endl;
+
+  
+	// find hard hot columns first
+  
+	for (ColumnDescriptorMapById::iterator it = columnDescriptorMapById_.begin(); it != columnDescriptorMapById_.end(); ++it) {
+	  if (it->second->isHotCol && it->second->uniqueChunksFetched) {
+		  totalBytes += (it->second->chunkDataFetched * it->second->uniqueChunksFetched + it->second->chunkBufsFetched - 1) / it->second->chunkBufsFetched;
+	  }
+	}
+
+	for (unsigned int i = 0; i < query_id_diff.size(); i++) {
+		std::map<unsigned long, std::map<std::vector<int>, size_t>>::const_iterator it2;
+
+		it2 = queryColumnFetchStats2.find(query_id_diff[i]);
+		if (it2 == queryColumnFetchStats2.end())
+			continue;
+
+		for (std::map<std::vector<int>, size_t>::const_iterator it3 = it2->second.begin(); it3 != it2->second.end(); it3++) {
+		size_t estimatedColumnSize;
+
+		int dbId = it3->first[0];
+		int tableId = it3->first[1];
+		int columnId = it3->first[2];
+
+		if (dbId != currentDB_.dbId)
+			continue;
+
+		ColumnIdKey columnIdKey(tableId, columnId);
+		ColumnDescriptorMapById::iterator colDescIt = columnDescriptorMapById_.find(columnIdKey);
+		if (colDescIt == columnDescriptorMapById_.end()) {
+			continue;
+		}
+		if (colDescIt->second->isHotCol || colDescIt->second->isSoftHotCol)
+			continue;
+
+		estimatedColumnSize = (columnFetchDataSizeStats2[it3->first] * columnChunkStats2[it3->first] + columnFetchStats2[it3->first] - 1) / columnFetchStats2[it3->first];
+	  
+		if (totalBytes + estimatedColumnSize <= highWaterMark) {
+			totalBytes += estimatedColumnSize;
+			colDescIt->second->isSoftHotCol = true;
+			std::cout << "Column " << colDescIt->second->columnName << " is set to soft hot" << std::endl; 
+		}
+		else  {
+		  break;
+	  
+		}
+	
+		}
+
+	}
+}
+
 void Catalog::buildMaps() {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
@@ -893,10 +981,10 @@ void Catalog::buildMaps() {
   int32_t skip_physical_cols = 0;
 
   //AppDirect
-  typedef std::tuple<float, size_t> ColumnFetchIdKey;
-  typedef std::multimap<ColumnFetchIdKey, ColumnDescriptor *> ColumnDescriptorMapByFetchId;
+  //typedef std::tuple<float, size_t> ColumnFetchIdKey;
+  //typedef std::multimap<ColumnFetchIdKey, ColumnDescriptor *> ColumnDescriptorMapByFetchId;
 
-  ColumnDescriptorMapByFetchId columnDescriptorMapByFetchId;
+  //ColumnDescriptorMapByFetchId columnDescriptorMapByFetchId;
 
   for (size_t r = 0; r < numRows; ++r) {
     ColumnDescriptor* cd = new ColumnDescriptor();
@@ -928,8 +1016,8 @@ void Catalog::buildMaps() {
     columnDescriptorMapById_[columnIdKey] = cd;
 
     //Appdirect
-    ColumnFetchIdKey columnFetchIdKey((cd->uniqueChunksFetched ? ((cd->chunkBufsFetched * 1.0) / cd->uniqueChunksFetched) : 0.0), cd->chunkDataFetched);
-    columnDescriptorMapByFetchId.insert(std::pair<ColumnFetchIdKey, ColumnDescriptor *>(columnFetchIdKey, cd));
+    //ColumnFetchIdKey columnFetchIdKey((cd->uniqueChunksFetched ? ((cd->chunkBufsFetched * 1.0) / cd->uniqueChunksFetched) : 0.0), cd->chunkDataFetched);
+    //columnDescriptorMapByFetchId.insert(std::pair<ColumnFetchIdKey, ColumnDescriptor *>(columnFetchIdKey, cd));
 
     if (skip_physical_cols <= 0) {
       skip_physical_cols = cd->columnType.get_physical_cols();
@@ -946,6 +1034,7 @@ void Catalog::buildMaps() {
     }
   }
 
+#if 0
   // AppDirect: determine hotness of each column
   size_t totalBytes = 0;
   size_t highWaterMark;
@@ -990,6 +1079,7 @@ void Catalog::buildMaps() {
 		  break;
 	  }
   }
+#endif /* 0 */
 
 
   // sort columnIdBySpi_ based on columnId
@@ -2227,6 +2317,9 @@ const bool Catalog::checkMetadataForDeletedRecs(int dbId,
   // check if there are rows deleted by examining metadata for the deletedColumn metadata
   ChunkKey chunkKeyPrefix = {dbId, tableId, columnId};
   std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
+
+  printf("Catalog::checkMetadataForDeletedRecs\n");
+
   dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix);
   int64_t chunk_max{0};
 
@@ -3162,7 +3255,8 @@ void Catalog::optimizeTable(const TableDescriptor* td) const {
                                                    updel_roll.memoryLevel,
                                                    0,
                                                    cm.second.numBytes,
-                                                   cm.second.numElements);
+                                                   cm.second.numElements,
+						   0);
       td->fragmenter->compactRows(this,
                                   td,
                                   cm.first[3],

@@ -31,13 +31,14 @@ std::shared_ptr<Chunk> Chunk::getChunk(const ColumnDescriptor* cd,
                                        const MemoryLevel memoryLevel,
                                        const int deviceId,
                                        const size_t numBytes,
-                                       const size_t numElems) {
+                                       const size_t numElems,
+				       const unsigned long query_id) {
   std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd));
   if ((memoryLevel == CPU_LEVEL) && (cd->isHotCol != true) && (cd->isSoftHotCol != true)) {
-	  chunkp->getChunkBuffer(data_mgr, key, PMM_LEVEL, deviceId, numBytes, numElems);
+	  chunkp->getChunkBuffer(data_mgr, key, PMM_LEVEL, deviceId, numBytes, numElems, query_id);
   }
   else {
-	  chunkp->getChunkBuffer(data_mgr, key, memoryLevel, deviceId, numBytes, numElems);
+	  chunkp->getChunkBuffer(data_mgr, key, memoryLevel, deviceId, numBytes, numElems, query_id);
   }
   return chunkp;
 }
@@ -64,18 +65,20 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
                            const MemoryLevel mem_level,
                            const int device_id,
                            const size_t num_bytes,
-                           const size_t num_elems) {
+                           const size_t num_elems,
+			   const unsigned long query_id) {
   if (column_desc->columnType.is_varlen() && !column_desc->columnType.is_fixlen_array()) {
     ChunkKey subKey = key;
     subKey.push_back(1);  // 1 for the main buffer
-    buffer = data_mgr->getChunkBuffer(subKey, mem_level, device_id, num_bytes);
+    buffer = data_mgr->getChunkBuffer(subKey, mem_level, device_id, num_bytes, query_id);
     subKey.pop_back();
     subKey.push_back(2);  // 2 for the index buffer
     index_buf = data_mgr->getChunkBuffer(
         subKey,
         mem_level,
         device_id,
-        (num_elems + 1) * sizeof(StringOffsetT));  // always record n+1 offsets so string
+        (num_elems + 1) * sizeof(StringOffsetT),
+	query_id);  // always record n+1 offsets so string
                                                    // length can be calculated
     switch (column_desc->columnType.get_type()) {
       case kARRAY: {
@@ -106,7 +109,7 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
         CHECK(false);
     }
   } else {
-    buffer = data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes);
+    buffer = data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes, query_id);
   }
 }
 
@@ -276,5 +279,12 @@ ChunkIter Chunk::begin_iterator(const ChunkMetadata& chunk_metadata,
   }
   it.num_elems = chunk_metadata.numElements;
   return it;
+}
+
+bool Chunk::isMetaDataChunk(const ChunkKey& key) {
+	if ((key.size() >= 4) && (key[3] == 0)) // fragment id is 0
+		return true;
+
+	return false;
 }
 }  // namespace Chunk_NS

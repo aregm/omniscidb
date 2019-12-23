@@ -193,7 +193,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::vector<InputTableInfo>& query_infos,
       const CompilationOptions& co,
-      ColumnCacheMap& column_cache_map);
+      ColumnCacheMap& column_cache_map,
+      const ExecutionOptions& eo);
 
   ExecutionResult executeFilter(const RelFilter*,
                                 const CompilationOptions&,

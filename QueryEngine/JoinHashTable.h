@@ -59,7 +59,8 @@ class JoinHashTable : public JoinHashTableInterface {
       const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_cache,
-      Executor* executor);
+      Executor* executor,
+      const ExecutionOptions& eo);
 
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
                             const int device_id) noexcept override {
@@ -153,25 +154,29 @@ class JoinHashTable : public JoinHashTableInterface {
       const Fragmenter_Namespace::FragmentInfo& fragment,
       const Data_Namespace::MemoryLevel effective_mem_lvl,
       const int device_id,
-      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+      const unsigned long query_id);
 
   std::pair<const int8_t*, size_t> getAllColumnFragments(
       const Analyzer::ColumnVar& hash_col,
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+      const unsigned long query_id);
 
   ChunkKey genHashTableKey(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
       const Analyzer::Expr* outer_col,
       const Analyzer::ColumnVar* inner_col) const;
 
-  void reify(const int device_count);
+  void reify(const int device_count, const ExecutionOptions& eo);
   void reifyOneToOneForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-      const int device_id);
+      const int device_id,
+      const ExecutionOptions& eo);
   void reifyOneToManyForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-      const int device_id);
+      const int device_id,
+      const ExecutionOptions& eo);
   void checkHashJoinReplicationConstraint(const int table_id) const;
   void initHashTableForDevice(
       const ChunkKey& chunk_key,
@@ -225,7 +230,8 @@ class JoinHashTable : public JoinHashTableInterface {
       const Data_Namespace::MemoryLevel effective_memory_level,
       const int device_id,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-      ThrustAllocator& dev_buff_owner);
+      ThrustAllocator& dev_buff_owner,
+      const ExecutionOptions& eo);
 
   bool isBitwiseEq() const;
 

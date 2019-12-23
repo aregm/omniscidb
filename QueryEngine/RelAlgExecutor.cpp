@@ -375,7 +375,8 @@ void RelAlgExecutor::executeRelAlgStep(
       eo.dynamic_watchdog_time_limit,
       eo.find_push_down_candidates,
       eo.just_calcite_explain,
-      eo.gpu_input_mem_limit_percent};
+      eo.gpu_input_mem_limit_percent,
+      eo.query_id};
 
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
@@ -1436,7 +1437,7 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
                                     partition_key_tuple,
                                     transform_to_inner(partition_key_tuple.get()));
     auto context = createWindowFunctionContext(
-        window_func, partition_key_cond, ra_exe_unit, query_infos, co, column_cache_map);
+        window_func, partition_key_cond, ra_exe_unit, query_infos, co, column_cache_map, eo);
     context->compute();
     window_project_node_context->addWindowFunctionContext(std::move(context),
                                                           target_index);
@@ -1449,7 +1450,8 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
     const CompilationOptions& co,
-    ColumnCacheMap& column_cache_map) {
+    ColumnCacheMap& column_cache_map,
+    const ExecutionOptions& eo) {
   const auto memory_level = co.device_type_ == ExecutorDeviceType::GPU
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
@@ -1459,7 +1461,8 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                             ra_exe_unit,
                                             memory_level,
                                             JoinHashTableInterface::HashType::OneToMany,
-                                            column_cache_map);
+                                            column_cache_map, 
+					    eo);
   if (!join_table_or_err.fail_reason.empty()) {
     throw std::runtime_error(join_table_or_err.fail_reason);
   }
@@ -1485,7 +1488,8 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                             memory_level,
                                             0,
                                             chunks_owner,
-                                            column_cache_map);
+                                            column_cache_map,
+					    eo.query_id);
     CHECK_EQ(join_col_elem_count, elem_count);
     context->addOrderColumn(column, order_col.get(), chunks_owner);
   }
@@ -1884,6 +1888,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const ssize_t previous_count) {
   INJECT_TIMER(executeWorkUnit);
 
+  //std::cout << "thread " << std::this_thread::get_id() << " executeWorkUnit " << std::endl;
   auto co = co_in;
   ColumnCacheMap column_cache;
   if (is_window_execution_unit(work_unit.exe_unit)) {

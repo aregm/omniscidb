@@ -65,7 +65,8 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
                                     Data_Namespace::CPU_LEVEL,
                                     0,
                                     chunkMetaIt->second.numBytes,
-                                    chunkMetaIt->second.numElements);
+                                    chunkMetaIt->second.numElements,
+				    0);
       CHECK(chunk);
 
       // the size

@@ -1909,7 +1909,8 @@ Executor::FetchResult Executor::fetchChunks(
     const FragmentsList& selected_fragments,
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
-    std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+    std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
+    const unsigned long query_id) {
   INJECT_TIMER(fetchChunks);
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
   std::vector<std::vector<size_t>> selected_fragments_crossjoin;
@@ -1966,7 +1967,8 @@ Executor::FetchResult Executor::fetchChunks(
                                                         col_id->getColId(),
                                                         all_tables_fragments,
                                                         memory_level_for_column,
-                                                        device_id);
+                                                        device_id,
+							query_id);
         } else {
           frag_col_buffers[it->second] =
               column_fetcher.getOneTableColumnFragment(table_id,
@@ -1976,7 +1978,8 @@ Executor::FetchResult Executor::fetchChunks(
                                                        chunks,
                                                        chunk_iterators,
                                                        memory_level_for_column,
-                                                       device_id);
+                                                       device_id,
+						       query_id);
         }
       }
     }
@@ -2769,7 +2772,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const RelAlgExecutionUnit& ra_exe_unit,
     const MemoryLevel memory_level,
     const JoinHashTableInterface::HashType preferred_hash_type,
-    ColumnCacheMap& column_cache) {
+    ColumnCacheMap& column_cache,
+    const ExecutionOptions& eo) {
   std::shared_ptr<JoinHashTableInterface> join_hash_table;
   const int device_count = deviceCountForMemoryLevel(memory_level);
   CHECK_GT(device_count, 0);
@@ -2784,7 +2788,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                            memory_level,
                                                            device_count,
                                                            column_cache,
-                                                           this);
+                                                           this,
+							   eo);
     } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
                    qual_bin_oper->get_left_operand())) {
       join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
@@ -2794,7 +2799,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                            preferred_hash_type,
                                                            device_count,
                                                            column_cache,
-                                                           this);
+                                                           this,
+							   eo);
     } else {
       try {
         join_hash_table = JoinHashTable::getInstance(qual_bin_oper,
@@ -2804,7 +2810,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                      preferred_hash_type,
                                                      device_count,
                                                      column_cache,
-                                                     this);
+                                                     this,
+						     eo);
       } catch (TooManyHashEntries&) {
         const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
         CHECK_EQ(join_quals.size(), size_t(1));
@@ -2817,7 +2824,8 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                              preferred_hash_type,
                                                              device_count,
                                                              column_cache,
-                                                             this);
+                                                             this,
+							     eo);
       }
     }
     CHECK(join_hash_table);

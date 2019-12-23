@@ -84,7 +84,8 @@ class DataMgr {
   AbstractBuffer* getChunkBuffer(const ChunkKey& key,
                                  const MemoryLevel memoryLevel,
                                  const int deviceId = 0,
-                                 const size_t numBytes = 0);
+                                 const size_t numBytes = 0,
+				 const unsigned long query_id = 0);
   void deleteChunksWithPrefix(const ChunkKey& keyPrefix);
   void deleteChunksWithPrefix(const ChunkKey& keyPrefix, const MemoryLevel memLevel);
   AbstractBuffer* alloc(const MemoryLevel memoryLevel,
@@ -116,8 +117,10 @@ class DataMgr {
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);
 
+  size_t getPeakVmSize(void);
   void startCollectingStatistics(void);
-  void stopCollectingStatistics(void);
+  void stopCollectingStatistics(std::map<unsigned long, long>& _query_time);
+  size_t EstimateDramRequired(int percentDramPerf);
 
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
 
@@ -141,8 +144,10 @@ class DataMgr {
   size_t reservedGpuMem_;
   std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>> chunkMutexMap_;
   mapd_shared_mutex chunkMutexMapMutex_;
-  std::map<ChunkKey, size_t> chunkFetchStats_;
-  std::map<ChunkKey, size_t> chunkFetchDataSizeStats_;
+  std::map<unsigned long, std::map<ChunkKey, size_t>> chunkFetchStats_;
+  std::map<unsigned long, std::map<ChunkKey, size_t>> chunkFetchDataSizeStats_;
+  //std::map<ChunkKey, size_t> chunkFetchStats_;
+  //std::map<ChunkKey, size_t> chunkFetchDataSizeStats_;
   std::mutex chunkFetchStatsMutex_;
   bool statisticsOn_;
 

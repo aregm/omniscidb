@@ -943,6 +943,8 @@ void FileMgr::getChunkMetadataVec(
 void FileMgr::getChunkMetadataVecForKeyPrefix(
     std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
     const ChunkKey& keyPrefix) {
+	printf("FileMgr getChunkMetadataVecForKeyPrefix\n");
+
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(
       chunkIndexMutex_);  // is this guarding the right structure?  it look slike we oly
                           // read here for chunk

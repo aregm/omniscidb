@@ -50,7 +50,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
       const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_map,
-      Executor* executor);
+      Executor* executor,
+      const ExecutionOptions& eo);
 
   static size_t getShardCountForCondition(const Analyzer::BinOper* condition,
                                           const RelAlgExecutionUnit& ra_exe_unit,
@@ -102,7 +103,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
                              const Executor* executor);
 
   virtual void reifyWithLayout(const int device_count,
-                               const JoinHashTableInterface::HashType layout);
+                               const JoinHashTableInterface::HashType layout,
+			       const ExecutionOptions& eo);
 
   struct ColumnsForDevice {
     const std::vector<JoinColumn> join_columns;
@@ -113,7 +115,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   virtual ColumnsForDevice fetchColumnsForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-      const int device_id);
+      const int device_id,
+      const ExecutionOptions& eo);
 
   virtual std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<ColumnsForDevice>&) const;
@@ -140,7 +143,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   std::pair<const int8_t*, size_t> getAllColumnFragments(
       const Analyzer::ColumnVar& hash_col,
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+      const unsigned long query_id);
 
   size_t shardCount() const;
 
@@ -156,17 +160,19 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   CompositeKeyInfo getCompositeKeyInfo(
       const std::vector<InnerOuter>& inner_outer_pairs) const;
 
-  void reify(const int device_count);
+  void reify(const int device_count, const ExecutionOptions& eo);
 
   JoinColumn fetchColumn(const Analyzer::ColumnVar* inner_col,
                          const Data_Namespace::MemoryLevel& effective_memory_level,
                          const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
                          std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-                         const int device_id);
+                         const int device_id,
+			 const ExecutionOptions& eo);
 
   void reifyForDevice(const ColumnsForDevice& columns_for_device,
                       const JoinHashTableInterface::HashType layout,
-                      const int device_id);
+                      const int device_id,
+		      const ExecutionOptions& eo);
 
   void checkHashJoinReplicationConstraint(const int table_id) const;
 

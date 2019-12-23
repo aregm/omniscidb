@@ -187,6 +187,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
   }
   auto cached_code = getCodeFromCache(key, cpu_code_cache_);
   if (!cached_code.empty()) {
+	  //printf("get code from code cache\n");
     return cached_code;
   }
 
@@ -223,6 +224,8 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
                  {{std::make_tuple(native_code, execution_engine, nullptr)}},
                  module,
                  cpu_code_cache_);
+
+  //printf("add code to code cache\n");
 
   return {std::make_pair(native_code, nullptr)};
 }

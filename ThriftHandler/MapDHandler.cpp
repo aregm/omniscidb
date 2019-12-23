@@ -107,6 +107,8 @@
 
 #include "QueryEngine/ArrowUtil.h"
 
+#include "DataMgr/DataMgr.h"
+
 #define ENABLE_GEO_IMPORT_COLUMN_MATCHING 0
 
 using Catalog_Namespace::Catalog;
@@ -120,6 +122,8 @@ using namespace Lock_Namespace;
   ex.error_msg = errstr;             \
   LOG(ERROR) << ex.error_msg;        \
   throw ex;
+
+volatile unsigned long qid = 0;
 
 namespace {
 
@@ -4384,7 +4388,7 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
     const bool just_validate,
     const bool find_push_down_candidates,
     const bool just_calcite_explain,
-    const bool explain_optimized_ir) const {
+    const bool explain_optimized_ir) {
   INJECT_TIMER(execute_rel_alg);
   const auto& cat = session_info.getCatalog();
   CompilationOptions co = {executor_device_type,
@@ -4393,6 +4397,10 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                            g_enable_dynamic_watchdog,
                            explain_optimized_ir ? ExecutorExplainType::Optimized
                                                 : ExecutorExplainType::Default};
+
+  unsigned long query = __sync_add_and_fetch(&qid, 1);
+
+
   ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
                          just_explain,
@@ -4404,7 +4412,8 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                          g_dynamic_watchdog_time_limit,
                          find_push_down_candidates,
                          just_calcite_explain,
-                         mapd_parameters_.gpu_input_mem_limit};
+                         mapd_parameters_.gpu_input_mem_limit,
+  			 query};
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -4417,10 +4426,15 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                                                      nullptr,
                                                      nullptr),
                          {}};
+  std::cout << "execute_rel_alg Query " << query << std::endl;
+
   _return.execution_time_ms += measure<>::execution(
       [&]() { result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr); });
   // reduce execution time by the time spent during queue waiting
   _return.execution_time_ms -= result.getRows()->getQueueTime();
+
+  _query_time[query] = _return.execution_time_ms;
+
   const auto& filter_push_down_info = result.getPushedDownFilterInfo();
   if (!filter_push_down_info.empty()) {
     return filter_push_down_info;
@@ -4449,6 +4463,8 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
         session_info.get_executor_device_type() == ExecutorDeviceType::GPU);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
+
+  unsigned long query = __sync_add_and_fetch(&qid, 1);
   ExecutionOptions eo = {false,
                          allow_multifrag_,
                          false,
@@ -4460,13 +4476,17 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                          g_dynamic_watchdog_time_limit,
                          false,
                          false,
-                         mapd_parameters_.gpu_input_mem_limit};
+                         mapd_parameters_.gpu_input_mem_limit,
+  			 query};
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
                                         mapd_parameters_,
                                         nullptr);
   RelAlgExecutor ra_executor(executor.get(), cat);
+
+  std::cout << "execute_rel_alg_df Query " << query << std::endl;
+
   const auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
   const auto rs = result.getRows();
   const auto copy = rs->getArrowCopy(data_mgr_.get(),
@@ -4482,6 +4502,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
     CHECK(!ipc_handle_to_dev_ptr_.count(_return.df_handle));
     ipc_handle_to_dev_ptr_.insert(std::make_pair(_return.df_handle, copy.df_dev_ptr));
   }
+
   _return.df_size = copy.df_size;
 }
 
@@ -5641,15 +5662,22 @@ bool MapDHandler::cool_column(const TSessionId& session,
 }
 
 void MapDHandler::dmstats(const TSessionId& session) {
+	_query_time.clear();
+	qid = 0;	//reset global query identifier
+
   auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   cat.getDataMgr().startCollectingStatistics();  
 }
 
 void MapDHandler::nodmstats(const TSessionId& session) {
+	std::cout << "Query time " << std::endl;
+	for (std::map<unsigned long, long>::iterator it = _query_time.begin(); it != _query_time.end(); it++) 
+		std::cout << it->first << " " << it->second << std::endl;
+
   auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
-  cat.getDataMgr().stopCollectingStatistics();  
+  cat.getDataMgr().stopCollectingStatistics(_query_time);  
 }
 
 void MapDHandler::shutdown() {

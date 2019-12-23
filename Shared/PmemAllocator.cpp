@@ -12,46 +12,67 @@
 
 #include "Shared/PmemAllocator.h"
 
-#define PMEM_DIR "/mnt/ad2/zma2"
+#define PMEM_DIR_1 "/mnt/ad1/zma2"
+#define PMEM_DIR_2 "/mnt/ad2/zma2"
 
 size_t slabsize = 4L * 1024 * 1024 * 1024; //4GB
-void *base = NULL;
-void *ceiling = NULL;
-size_t numslabs = 0;
-size_t buffersize = 0;
+struct PmemPoolDescriptor {
+	void *base;
+	void *ceiling;
+	unsigned long *volatile allocated_flags;
+	size_t size;
+	size_t num_slabs;
+	size_t volatile num_free_slabs;
+};
+
+struct PmemPoolDescriptor *pmem_pools;
 
 //size_t * volatile bitmap;
 //size_t numbitmaps;
 //volatile size_t numfreeslabs;
 
-unsigned long * volatile allocated_flags;
-size_t volatile numfreeslabs;
+unsigned int curpool = 0;
+unsigned int numpools = 0;
+size_t total_size = 0;
 
 size_t
 GetMaxPmemBufferSize(void)
 {
-	return buffersize;
+	return total_size;
 }
 
 void *
 AllocateSlabInPmem(void)
 {
 	size_t i;
+	unsigned int index;
 
-	while (numfreeslabs) {
-		for (i = 0; i < numslabs; i++) {
-			if (allocated_flags[i] == 0) {
-				if (__sync_bool_compare_and_swap(&(allocated_flags[i]), 0, 1)) {
-					size_t left;
-						
-					left = __sync_fetch_and_sub(&numfreeslabs, 1);
-				
-					//printf("%ld free slabs\n", left - 1);
-				
-					return (void *)((char *)base + slabsize * i);
+	index = __sync_val_compare_and_swap(&curpool, numpools, 0);
+	if (index == numpools)
+		index = 0;
+
+	for (unsigned int j = 0; j < numpools; j++) {
+		if (pmem_pools[index].num_free_slabs) {
+			for (i = 0; i < pmem_pools[index].num_slabs; i++) {
+				if (pmem_pools[index].allocated_flags[i] == 0) {
+					if (__sync_bool_compare_and_swap(&(pmem_pools[index].allocated_flags[i]), 0, 1)) {
+						//size_t left;
+						//left = __sync_fetch_and_sub(&(pmem_pools[index].num_free_slabs), 1);
+					
+						//printf("%ld free slabs\n", left - 1);
+
+						// well, not strictly interleaving
+						__sync_fetch_and_add(&curpool, 1);
+
+						return (void *)((char *)(pmem_pools[index].base) + slabsize * i);
+					}
 				}
 			}
 		}
+	
+		index++;
+		if (index == numpools)
+			index = 0;
 	}
 #if 0
 	size_t oldv;
@@ -93,13 +114,16 @@ FreeSlabInPmem(void *addr)
 
 	//printf("free slab %p\n", addr);
 
-	i = (((char *)addr - (char *)base) / slabsize);
-
-	if (__sync_bool_compare_and_swap(&(allocated_flags[i]), 1, 0)) {
-		__sync_fetch_and_add(&numfreeslabs, 1);
-	}
-	else {
-		printf("allcoated_flags corrupted\n");
+	for (unsigned int j = 0; j < numpools; j++) {
+		if (((char *)addr >= (char *)(pmem_pools[j].base)) && ((char *)addr < (char *)(pmem_pools[j].ceiling))) {
+			i = (((char *)addr - (char *)(pmem_pools[j].base)) / slabsize);
+			if (__sync_bool_compare_and_swap(&(pmem_pools[j].allocated_flags[i]), 1, 0)) {
+				__sync_fetch_and_add(&(pmem_pools[j].num_free_slabs), 1);
+			}
+			else {
+				printf("allcoated_flags corrupted\n");
+			}
+		}
 	}
 #if 0
 	size_t j;
@@ -121,75 +145,108 @@ FreeSlabInPmem(void *addr)
 #endif /* 0 */
 }
 
+// TODO: read this information from a config file or command line options
+//static char *dirs[2] = {PMEM_DIR_1, PMEM_DIR_2};
+//static char *filename[2] = {"/mnt/ad1/zma2/omnisci.XXXXXX", "/mnt/ad2/zma2/omnisci.XXXXXX"};
+
 int
-InitializePmem(size_t pmem_size, size_t slab_size)
+InitializePmem(size_t slab_size)
 {
-	if (pmem_size == 0) {
+	numpools = 2;
+	slabsize = slab_size;
+
+	pmem_pools = (struct PmemPoolDescriptor *)malloc(sizeof(struct PmemPoolDescriptor) * numpools);
+
+	for (unsigned int i = 0; i < numpools; i++) {
 		struct statfs buf;
 
-		if (statfs(PMEM_DIR, &buf)) {
+		if (i == 0) {
+		if (statfs(PMEM_DIR_1, &buf)) {
 			printf("failed to initialize pmem\n");
 			return -1;
 		}
+		printf("InitializePmem %s size=%ld\n", PMEM_DIR_1,  pmem_pools[i].size);
+		}
+		else {
+		if (statfs(PMEM_DIR_2, &buf)) {
+			printf("failed to initialize pmem\n");
+			return -1;
+		}
+		printf("InitializePmem %s size=%ld\n", PMEM_DIR_2,  pmem_pools[i].size);
+		}
 
-		pmem_size = buf.f_bavail * buf.f_bsize;
-	}
+		pmem_pools[i].size = buf.f_bavail * buf.f_bsize;
+	
 
-	printf("InitializePmem size=%ld\n", pmem_size);
 
-	static char filename[] = "/mnt/ad2/zma2/omnisci.XXXXXX";
-	int fd;
+		int fd;
+	
+		char filename[128];
 
-	if ((fd = mkstemp(filename)) < 0) {
-		printf("mkstemp fialed\n");
-		exit(-1);
-	}
+		if (i == 0) {
+		sprintf(filename, "%s", "/mnt/ad1/zma2/omnisci.XXXXXX");
+		}
+		else
+		{
+		sprintf(filename, "%s", "/mnt/ad2/zma2/omnisci.XXXXXX");
+		}
 
-	unlink(filename);
 
-	int ret;
+		if ((fd = mkstemp(filename)) < 0) {
+			printf("mkstemp fialed\n");
+			exit(-1);
+		}
+		unlink(filename);
 
-	numslabs = pmem_size/slab_size;
-	slabsize = slab_size;
-	buffersize = numslabs * slabsize;
+		int ret;
+	
+		pmem_pools[i].num_slabs = pmem_pools[i].size/slab_size;
+		pmem_pools[i].size = pmem_pools[i].num_slabs * slabsize; 
+		total_size +=  pmem_pools[i].size;
 
-	if ((ret = posix_fallocate(fd, 0, buffersize)) != 0) {
-		printf("posix_fallcoate failed err=%d\n", ret);
-		exit(-1);
-	}
+		if ((ret = posix_fallocate(fd, 0, pmem_pools[i].size)) != 0) {
+			printf("posix_fallcoate failed err=%d\n", ret);
+			exit(-1);
+		}
 
-    
-	if ((base = mmap(NULL, buffersize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-		printf("mmap filed\n");
-		return -1;
-	}
+		if ((pmem_pools[i].base = mmap(NULL, pmem_pools[i].size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+			printf("mmap filed\n");
+			return -1;
+		}
  
-	ceiling = (void *)((char *)base + buffersize);
+		pmem_pools[i].ceiling = (void *)((char *)(pmem_pools[i].base) + pmem_pools[i].size);
 
-	//if (munmap(base, size)) {
-	//	printf("munmap failed\n");
-	//	exit(-1);
-	//}
+	
+		//if (munmap(base, size)) {
+		//	printf("munmap failed\n");
+		//	exit(-1);
+		//}
 
-	numfreeslabs = numslabs;
+	
+		pmem_pools[i].num_free_slabs = pmem_pools[i].num_slabs;
 
-	//bitmap = (size_t *)malloc((numslabs  + sizeof(size_t) * 8 - 1 ) / (sizeof(size_t) * 8 ) * sizeof(size_t));
-	//numbitmaps = (numslabs  + sizeof(size_t) * 8 - 1 )/ (sizeof(size_t) * 8);
+	
+		//bitmap = (size_t *)malloc((numslabs  + sizeof(size_t) * 8 - 1 ) / (sizeof(size_t) * 8 ) * sizeof(size_t));
+		//numbitmaps = (numslabs  + sizeof(size_t) * 8 - 1 )/ (sizeof(size_t) * 8);
 
-	allocated_flags = (unsigned long *)malloc(numslabs * sizeof(unsigned long));
+	
+		pmem_pools[i].allocated_flags = (unsigned long *)malloc(pmem_pools[i].num_slabs * sizeof(unsigned long));
 
-	size_t i;
+	
+		//for (i = 0; i < numbitmaps; i++) {
+		//	bitmap[i] = 0;
+		//}
 
-	//for (i = 0; i < numbitmaps; i++) {
-	//	bitmap[i] = 0;
-	//}
+	
+		for (unsigned int j = 0; j < pmem_pools[i].num_slabs; j++) {
+			pmem_pools[i].allocated_flags[j] = 0;
+		}
 
-	for (i = 0; i < numslabs; i++) {
-		allocated_flags[i] = 0;
+	
+		//printf("pmem initialzied numbitmaps = %ld numslabs=%ld\n", numbitmaps, numslabs);
+	
+		printf("pmem initialzied numslabs=%ld\n", pmem_pools[i].num_slabs);
 	}
-
-	//printf("pmem initialzied numbitmaps = %ld numslabs=%ld\n", numbitmaps, numslabs);
-	printf("pmem initialzied numslabs=%ld\n", numslabs);
 
 	return 0;
 }
@@ -197,13 +254,11 @@ InitializePmem(size_t pmem_size, size_t slab_size)
 int
 IsPmem(void *addr)
 {
-	if (base == NULL)
-		return 0;
-
-	if (((char *)addr >= (char *)base) && ((char *)addr < (char *)ceiling)) 
-		return 1;
-	else
-		return 0;
+	for (unsigned int i = 0; i < numpools; i++) {
+		if (((char *)addr >= (char *)(pmem_pools[i].base)) && ((char *)addr < (char *)(pmem_pools[i].ceiling))) 
+			return 1;
+	}
+	return 0;
 }
 
 #if 0

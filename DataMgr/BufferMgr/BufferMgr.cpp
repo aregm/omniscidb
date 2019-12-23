@@ -411,9 +411,9 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
             << " Number pages requested " << numPagesRequested
             << " Best Eviction Start Slab " << bestEvictionStartSlab << " "
             << getStringMgrType() << ":" << deviceId_;
-  printf("Evictiong start\n");
+  //printf("Eviction start\n");
   bestEvictionStart = evict(bestEvictionStart, numPagesRequested, bestEvictionStartSlab);
-  printf("Evictiong done\n");
+  //printf("Eviction done\n");
   return bestEvictionStart;
 }
 
