@@ -429,6 +429,8 @@ class MapDHandler : public MapDIf {
                             const std::string& column_name) override;
   void dmstats(const TSessionId& session) override;
   void nodmstats(const TSessionId& session) override;
+  int64_t predict_dram_size(const TSessionId& session,
+                            const int32_t perf_bar) override;
 
   void shutdown();
   // end of sync block for HAHandler and mapd.thrift

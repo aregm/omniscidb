@@ -5680,6 +5680,13 @@ void MapDHandler::nodmstats(const TSessionId& session) {
   cat.getDataMgr().stopCollectingStatistics(_query_time);  
 }
 
+int64_t MapDHandler::predict_dram_size(const TSessionId& session, const int32_t perf_bar) {
+  auto session_info = get_session_copy(session);
+  auto& cat = session_info.getCatalog();
+  return cat.getDataMgr().EstimateDramRequired(perf_bar);
+}
+
+
 void MapDHandler::shutdown() {
   if (calcite_) {
     calcite_->close_calcite_server();

@@ -264,6 +264,8 @@ StandardCommand(Help, {
                "data manager statistics.\n";
   std::cout << "\\nodmstats Stop collecting "
                "data manager statistics.\n";
+  std::cout << "\\predict_dram_size<perf_bar> Predict "
+               "amount of DRAM required to meet a performance threshold in AppDirect mode.\n";
   std::cout << "\\q Quit.\n";
   std::cout.flush();
 });

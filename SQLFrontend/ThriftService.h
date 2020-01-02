@@ -40,7 +40,8 @@ enum ThriftService {
   kHEAT_COLUMN,
   kCOOL_COLUMN,
   kDMSTATS,
-  kNODMSTATS
+  kNODMSTATS,
+  kPREDICT_DRAM_SIZE
 };
 
 #endif

@@ -119,6 +119,22 @@ void nodmstats(ClientContext& context) {
 	}
 }
 
+void predict_dram_size(ClientContext& context, char const *perf_bar_str) {
+
+	int perf_bar;
+	int64_t size;
+	
+	perf_bar = atoi(perf_bar_str);
+	size = thrift_with_retry(kPREDICT_DRAM_SIZE, context, perf_bar);
+
+	if (size == 0) {
+		std::cout << "Not enough data available." << std::endl;
+	}
+	else {
+		std::cout << "At least " << size << " bytes of DRAM required." << std::endl;
+	}
+}
+
 void copy_table(char const* filepath, char const* table, ClientContext& context) {
   if (context.session == INVALID_SESSION_ID) {
     std::cerr << "Not connected to any databases." << std::endl;
@@ -1493,6 +1509,7 @@ int main(int argc, char** argv) {
         ( "\\cool_column", 3, 3, [&](Params const& p) { set_column_cold(context, p[1].c_str(), p[2].c_str() ); } )
         ( "\\dmstats", 1, 1, [&](Params const& p) { dmstats(context); } )
         ( "\\nodmstats", 1, 1, [&](Params const& p) { nodmstats(context); } )
+        ( "\\predict_dram_size", 2, 2, [&](Params const& p) { predict_dram_size(context, p[1].c_str() ); } )
         .is_resolved();
 
       if (resolution_status == false) {

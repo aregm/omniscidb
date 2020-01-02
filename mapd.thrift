@@ -568,4 +568,5 @@ service MapD {
   bool cool_column(1: TSessionId session 2: string table_name 3: string column_name) throws (1: TMapDException e)
   void dmstats(1: TSessionId session) throws (1: TMapDException e)
   void nodmstats(1: TSessionId session) throws (1: TMapDException e)
+  i64 predict_dram_size(1: TSessionId session 2: i32 perf_bar) throws (1: TMapDException e)
 }
