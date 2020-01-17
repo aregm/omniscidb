@@ -131,7 +131,17 @@ void predict_dram_size(ClientContext& context, char const *perf_bar_str) {
 		std::cout << "Not enough data available." << std::endl;
 	}
 	else {
-		std::cout << "At least " << size << " bytes of DRAM required." << std::endl;
+		if (size > 1024 * 1024 * 1024) {
+			std::cout << "At least " << ((size * 1.0) / (1024 * 1024 * 1024)) << "GB of DRAM required." << std::endl;
+		}
+		else {
+			if (size > 1024 * 1024) {
+				std::cout << "At least " << ((size * 1.0) / (1024 * 1024)) << "MB of DRAM required." << std::endl;
+			}
+			else {
+				std::cout << "At least " << size << "bytes of DRAM required." << std::endl;
+			}
+		}
 	}
 }
 
