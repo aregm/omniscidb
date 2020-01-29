@@ -199,6 +199,7 @@ class MapDProgramOptions {
   std::string cluster_file = {"cluster.conf"};
   std::string license_path = {""};
   bool cpu_only = false;
+  std::string pmm_path = {""};
   bool pmm = false;
   bool flush_log = true;
   bool verbose_logging = false;
@@ -301,8 +302,8 @@ void MapDProgramOptions::fillOptions() {
       "Run on CPU only, even if GPUs are available.");
   help_desc.add_options()(
       "pmm",
-      po::value<bool>(&pmm)->default_value(pmm)->implicit_value(true),
-      "Use Intel(R) Optane DCPMM in AppDirect mode.");
+      po::value<std::string>(&pmm_path),
+      "Path to file containing Intel(R) DCPMM mount points");
   help_desc.add_options()("profile-scale-factor",
                           po::value<int>(&mapd_parameters.prof_scale_factor)
                               ->default_value(mapd_parameters.prof_scale_factor),
@@ -640,6 +641,16 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     return false;
   }
 
+  boost::algorithm::trim_if(pmm_path, boost::is_any_of("\"'"));
+  if (pmm_path.length() >0) {
+	  if (!boost::filesystem::exists(pmm_path)) {
+		  std::cerr << "OmniSci pmem mount point file does not exist at '" << pmm_path << std::endl;
+		  return_code = 1;
+		  return false;
+	  }
+	  pmm = true;
+  }
+
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
   const auto data_path = boost::filesystem::path(base_path) / "mapd_data";
   if (!boost::filesystem::exists(data_path)) {
@@ -835,6 +846,7 @@ int main(int argc, char** argv) {
                                                   prog_config_opts.base_path,
                                                   prog_config_opts.cpu_only,
                                                   prog_config_opts.pmm,
+						  prog_config_opts.pmm_path,
                                                   prog_config_opts.allow_multifrag,
                                                   prog_config_opts.jit_debug,
                                                   prog_config_opts.read_only,

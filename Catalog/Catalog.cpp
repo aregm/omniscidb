@@ -851,9 +851,9 @@ Catalog::setSoftHotColumns(void)
 		return;
 	}
 
-	for (unsigned int i = 0; i < query_id_diff.size(); i++) {
-		std::cout << query_id_diff[i] << " " <<  query_time_diff[i] << std::endl;
-	}
+	//for (unsigned int i = 0; i < query_id_diff.size(); i++) {
+	//	std::cout << query_id_diff[i] << " " <<  query_time_diff[i] << std::endl;
+	//}
 
 	size_t totalBytes = peakWorkVmSize;
 	size_t highWaterMark;
@@ -908,7 +908,6 @@ Catalog::setSoftHotColumns(void)
 		}
 	
 		}
-
 	}
 }
 
@@ -2317,8 +2316,6 @@ const bool Catalog::checkMetadataForDeletedRecs(int dbId,
   // check if there are rows deleted by examining metadata for the deletedColumn metadata
   ChunkKey chunkKeyPrefix = {dbId, tableId, columnId};
   std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
-
-  printf("Catalog::checkMetadataForDeletedRecs\n");
 
   dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix);
   int64_t chunk_max{0};

@@ -10,10 +10,14 @@
 #include <pthread.h>
 #include <stdlib.h>
 
+#include <fstream>
+#include <string>
+#include <iostream>
+#include <vector>
+
 #include "Shared/PmemAllocator.h"
 
-#define PMEM_DIR_1 "/mnt/ad1/zma2"
-#define PMEM_DIR_2 "/mnt/ad2/zma2"
+using namespace std;
 
 size_t slabsize = 4L * 1024 * 1024 * 1024; //4GB
 struct PmemPoolDescriptor {
@@ -145,14 +149,37 @@ FreeSlabInPmem(void *addr)
 #endif /* 0 */
 }
 
-// TODO: read this information from a config file or command line options
-//static char *dirs[2] = {PMEM_DIR_1, PMEM_DIR_2};
-//static char *filename[2] = {"/mnt/ad1/zma2/omnisci.XXXXXX", "/mnt/ad2/zma2/omnisci.XXXXXX"};
 
+/*
+ * the pmm_path is the file containing the persistent memory file folder
+ * each line in the file is a directory pathname, for example:
+ * /mnt/ad1/omnisci
+ * /mnt/ad3/omnisci
+ */
 int
-InitializePmem(size_t slab_size)
+InitializePmem(const std::string& pmm_path, size_t slab_size)
 {
-	numpools = 2;
+	std::vector<std::string> pmem_dirs;
+
+	//std::cout << "InitializePmem " << pmm_path << " " << slab_size << std::endl;
+
+	ifstream pmem_dirs_file(pmm_path);
+	if (pmem_dirs_file.is_open()) {
+		std::string line;
+		while (!pmem_dirs_file.eof()) {
+			std::getline(pmem_dirs_file, line);
+			if (!line.empty()) {
+				pmem_dirs.push_back(line);
+				numpools++;
+			}
+		}
+		pmem_dirs_file.close();
+	}
+	else{
+		std::cout << "Unable to open file " << pmm_path << std::endl; 
+		return -1;
+	}
+
 	slabsize = slab_size;
 
 	pmem_pools = (struct PmemPoolDescriptor *)malloc(sizeof(struct PmemPoolDescriptor) * numpools);
@@ -160,36 +187,20 @@ InitializePmem(size_t slab_size)
 	for (unsigned int i = 0; i < numpools; i++) {
 		struct statfs buf;
 
-		if (i == 0) {
-		if (statfs(PMEM_DIR_1, &buf)) {
-			printf("failed to initialize pmem\n");
+		if (statfs(pmem_dirs[i].c_str(), &buf)) {
+			std::cout << "failed to initialize pmem " << pmem_dirs[i] << std::endl;
 			return -1;
-		}
-		printf("InitializePmem %s size=%ld\n", PMEM_DIR_1,  pmem_pools[i].size);
-		}
-		else {
-		if (statfs(PMEM_DIR_2, &buf)) {
-			printf("failed to initialize pmem\n");
-			return -1;
-		}
-		printf("InitializePmem %s size=%ld\n", PMEM_DIR_2,  pmem_pools[i].size);
 		}
 
 		pmem_pools[i].size = buf.f_bavail * buf.f_bsize;
 	
-
+		//printf("InitializePmem %s size=%ld\n", pmem_dirs[i].c_str(),  pmem_pools[i].size);
 
 		int fd;
 	
 		char filename[128];
 
-		if (i == 0) {
-		sprintf(filename, "%s", "/mnt/ad1/zma2/omnisci.XXXXXX");
-		}
-		else
-		{
-		sprintf(filename, "%s", "/mnt/ad2/zma2/omnisci.XXXXXX");
-		}
+		sprintf(filename, "%s/omnisci.XXXXXX", pmem_dirs[i].c_str());
 
 
 		if ((fd = mkstemp(filename)) < 0) {
@@ -245,7 +256,7 @@ InitializePmem(size_t slab_size)
 	
 		//printf("pmem initialzied numbitmaps = %ld numslabs=%ld\n", numbitmaps, numslabs);
 	
-		printf("pmem initialzied numslabs=%ld\n", pmem_pools[i].num_slabs);
+		//printf("pmem initialzied numslabs=%ld\n", pmem_pools[i].num_slabs);
 	}
 
 	return 0;

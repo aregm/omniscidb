@@ -52,6 +52,7 @@ namespace Data_Namespace {
 DataMgr::DataMgr(const string& dataDir,
                  const MapDParameters& mapd_parameters,
 		 const bool pmm,
+		 const std::string& pmm_path,
                  const bool useGpus,
                  const int numGpus,
                  const int startGpu,
@@ -73,7 +74,7 @@ DataMgr::DataMgr(const string& dataDir,
   hasPmm_ = false;
   profSF_ = 1;
   if (pmm) {
-	  if (InitializePmem((1L << 32)) == 0) {
+	  if (InitializePmem(pmm_path, (1L << 32)) == 0) {
 	    hasPmm_ = true;
 	    profSF_ = mapd_parameters.prof_scale_factor;
 	    printf("Use AppDirect\n");
@@ -251,9 +252,9 @@ DataMgr::EstimateDramRequired(int percentDramPerf)
 		return 0;
 	}
 
-	for (unsigned int i = 0; i < query_id_diff.size(); i++) {
-		std::cout << query_id_diff[i] << " " <<  query_time_diff[i] << std::endl;
-	}
+	//for (unsigned int i = 0; i < query_id_diff.size(); i++) {
+	//	std::cout << query_id_diff[i] << " " <<  query_time_diff[i] << std::endl;
+	//}
 
 	long query_dram_time_total;
 	long query_pmem_time_total;
@@ -308,7 +309,7 @@ DataMgr::EstimateDramRequired(int percentDramPerf)
 		dramRequired += estimatedColumnSize;
 	}
 
-	printf("Need %lu DRAM\n", dramRequired);
+	//printf("Need %lu DRAM\n", dramRequired);
 
 	return dramRequired;
 
@@ -662,7 +663,6 @@ void DataMgr::getChunkMetadataVec(
 void DataMgr::getChunkMetadataVecForKeyPrefix(
     std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
     const ChunkKey& keyPrefix) {
-	printf("DataMgr getChunkMetadataVecForKeyPrefix\n");
   bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, keyPrefix);
 }
 

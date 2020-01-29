@@ -69,7 +69,8 @@ class DataMgr {
  public:
   DataMgr(const std::string& dataDir,
           const MapDParameters& mapd_parameters,
-          const bool pmm,
+	  const bool pmm,
+	  const std::string& pmm_path,
           const bool useGpus,
           const int numGpus,
           const int startGpu = 0,
