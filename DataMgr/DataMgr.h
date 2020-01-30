@@ -118,6 +118,8 @@ class DataMgr {
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);
 
+  bool isPmemUsed(void);
+  int getProfileScaleFactor(void);
   size_t getPeakVmSize(void);
   void startCollectingStatistics(void);
   void stopCollectingStatistics(std::map<unsigned long, long>& _query_time);

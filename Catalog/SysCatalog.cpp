@@ -2308,10 +2308,11 @@ SysCatalog::storeDataMgrStatistics(bool isPmem, size_t& peakWorkVmSize, std::map
 }
 
 int
-SysCatalog::loadDataMgrStatistics(size_t& peakWorkVmSize, std::map<unsigned long, long>& query_pmem_time, std::map<unsigned long, long>& query_dram_time, std::vector<unsigned long>& query_id_diffs, std::vector<long>& query_time_diffs, std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnFetchStats, std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnChunkFetchStats, std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnDataFetchStats, std::map<std::vector<int>, size_t>& columnFetchStats, std::map<std::vector<int>, size_t>& columnChunkFetchStats, std::map<std::vector<int>, size_t>& columnDataFetchStats)
+SysCatalog::loadDataMgrStatistics(int sf, size_t& peakWorkVmSize, std::map<unsigned long, long>& query_pmem_time, std::map<unsigned long, long>& query_dram_time, std::vector<unsigned long>& query_id_diffs, std::vector<long>& query_time_diffs, std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnFetchStats, std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnChunkFetchStats, std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnDataFetchStats, std::map<std::vector<int>, size_t>& columnFetchStats, std::map<std::vector<int>, size_t>& columnChunkFetchStats, std::map<std::vector<int>, size_t>& columnDataFetchStats)
 {
     sys_sqlite_lock sqlite_lock(this);
 
+    // check profile data of both DRAM and PMEM are present
     sqliteConnector_->query(
         "SELECT query_id FROM query_pmem_profile EXCEPT SELECT query_id FROM query_dram_profile"
         );
@@ -2324,18 +2325,19 @@ SysCatalog::loadDataMgrStatistics(size_t& peakWorkVmSize, std::map<unsigned long
     if (sqliteConnector_->getNumRows() != 0)
 	    return 2;
 
+    // we have profile data of both DRAM and PMEM runs
     sqliteConnector_->query(
         "SELECT peak_work_vm_size FROM peak_work_vm"
         );
     if (sqliteConnector_->getNumRows() != 0)
-	    peakWorkVmSize = sqliteConnector_->getData<size_t>(0, 0);
+	    peakWorkVmSize = sqliteConnector_->getData<size_t>(0, 0) * sf;
 
     sqliteConnector_->query(
         "SELECT query_id, elapsed_time FROM query_pmem_profile ORDER BY query_id"
         );
     size_t rows = sqliteConnector_->getNumRows();
     for (size_t i = 0; i < rows; i++) {
-	    query_pmem_time[sqliteConnector_->getData<unsigned long>(i, 0)] = sqliteConnector_->getData<long>(i, 1);
+	    query_pmem_time[sqliteConnector_->getData<unsigned long>(i, 0)] = sqliteConnector_->getData<long>(i, 1) * sf;
     }
 
     sqliteConnector_->query(
@@ -2343,7 +2345,7 @@ SysCatalog::loadDataMgrStatistics(size_t& peakWorkVmSize, std::map<unsigned long
         );
     rows = sqliteConnector_->getNumRows();
     for (size_t i = 0; i < rows; i++) {
-	    query_dram_time[sqliteConnector_->getData<unsigned long>(i, 0)] = sqliteConnector_->getData<long>(i, 1);
+	    query_dram_time[sqliteConnector_->getData<unsigned long>(i, 0)] = sqliteConnector_->getData<long>(i, 1) * sf;
     }
 
     sqliteConnector_->query(
@@ -2352,7 +2354,7 @@ SysCatalog::loadDataMgrStatistics(size_t& peakWorkVmSize, std::map<unsigned long
     rows = sqliteConnector_->getNumRows();
     for (size_t i = 0; i < rows; i++) {
 	    query_id_diffs.push_back(sqliteConnector_->getData<unsigned long>(i, 0));
-	    query_time_diffs.push_back(sqliteConnector_->getData<long>(i, 1));
+	    query_time_diffs.push_back(sqliteConnector_->getData<long>(i, 1) * sf);
     }
 
 
@@ -2376,9 +2378,9 @@ SysCatalog::loadDataMgrStatistics(size_t& peakWorkVmSize, std::map<unsigned long
 		    key.push_back(sqliteConnector_->getData<int>(i, 2));
 		    key.push_back(sqliteConnector_->getData<int>(i, 3));
 
-		    queryColumnFetchStats[query_id][key] = sqliteConnector_->getData<size_t>(i, 4);
-		    queryColumnChunkFetchStats[query_id][key] = sqliteConnector_->getData<size_t>(i, 5);
-		    queryColumnDataFetchStats[query_id][key] = sqliteConnector_->getData<size_t>(i, 6);
+		    queryColumnFetchStats[query_id][key] = sqliteConnector_->getData<size_t>(i, 4) * sf;
+		    queryColumnChunkFetchStats[query_id][key] = sqliteConnector_->getData<size_t>(i, 5) * sf;
+		    queryColumnDataFetchStats[query_id][key] = sqliteConnector_->getData<size_t>(i, 6) * sf;
 
 		    i++;
 	    }
@@ -2395,9 +2397,9 @@ SysCatalog::loadDataMgrStatistics(size_t& peakWorkVmSize, std::map<unsigned long
 	key.push_back(sqliteConnector_->getData<int>(i, 1));
 	key.push_back(sqliteConnector_->getData<int>(i, 2));
 
-	columnFetchStats[key] = sqliteConnector_->getData<size_t>(i, 3);
-	columnChunkFetchStats[key] = sqliteConnector_->getData<size_t>(i, 4);
-	columnDataFetchStats[key] = sqliteConnector_->getData<size_t>(i, 5);
+	columnFetchStats[key] = sqliteConnector_->getData<size_t>(i, 3) * sf;
+	columnChunkFetchStats[key] = sqliteConnector_->getData<size_t>(i, 4) * sf;
+	columnDataFetchStats[key] = sqliteConnector_->getData<size_t>(i, 5) * sf;
     }
 
     return 0;

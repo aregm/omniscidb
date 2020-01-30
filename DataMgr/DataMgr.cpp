@@ -72,11 +72,10 @@ DataMgr::DataMgr(const string& dataDir,
   }
 
   hasPmm_ = false;
-  profSF_ = 1;
+  profSF_ = mapd_parameters.prof_scale_factor;
   if (pmm) {
 	  if (InitializePmem(pmm_path, (1L << 32)) == 0) {
 	    hasPmm_ = true;
-	    profSF_ = mapd_parameters.prof_scale_factor;
 	    printf("Use AppDirect\n");
 	  }
   }
@@ -97,6 +96,18 @@ DataMgr::startCollectingStatistics(void)
 	chunkFetchStatsLock.unlock();
 
 	std::cout << "Data manager statistics on." << std::endl;
+}
+
+bool
+DataMgr::isPmemUsed(void)
+{
+	return hasPmm_;
+}
+
+int
+DataMgr::getProfileScaleFactor(void)
+{
+	return profSF_;
 }
 
 size_t
@@ -166,12 +177,12 @@ DataMgr::stopCollectingStatistics(std::map<unsigned long, long>& query_time)
 				if (itm2 != columnFetchStats.end()) {
 					itm2->second += itm->second;
 					columnChunkStats[key] += 1;
-					columnFetchDataSizeStats[key] += (chunkFetchDataSizeStats_[query_id][itm->first] * profSF_);
+					columnFetchDataSizeStats[key] += chunkFetchDataSizeStats_[query_id][itm->first];
 				}
 				else {
 					columnFetchStats[key] = itm->second;
 					columnChunkStats[key] = 1;
-					columnFetchDataSizeStats[key] = chunkFetchDataSizeStats_[query_id][itm->first] * profSF_;
+					columnFetchDataSizeStats[key] = chunkFetchDataSizeStats_[query_id][itm->first];
 				}
 
 				std::map<unsigned long, std::map<std::vector<int>, size_t>>::iterator itmom2;
@@ -180,13 +191,13 @@ DataMgr::stopCollectingStatistics(std::map<unsigned long, long>& query_time)
 				if (itm2 != itmom2->second.end()) {
 					itm2->second += itm->second;
 					queryColumnChunkStats[query_id][key] += 1;
-					queryColumnFetchDataSizeStats[query_id][key] += (chunkFetchDataSizeStats_[query_id][itm->first] * profSF_);
+					queryColumnFetchDataSizeStats[query_id][key] += chunkFetchDataSizeStats_[query_id][itm->first];
 			
 				}
 				else {
 					queryColumnFetchStats[query_id][key] = itm->second;
 					queryColumnChunkStats[query_id][key] = 1;
-					queryColumnFetchDataSizeStats[query_id][key] = chunkFetchDataSizeStats_[query_id][itm->first] * profSF_;
+					queryColumnFetchDataSizeStats[query_id][key] = chunkFetchDataSizeStats_[query_id][itm->first];
 				}
 			}
 		}
@@ -247,7 +258,8 @@ DataMgr::EstimateDramRequired(int percentDramPerf)
 		std::cout << "Percentage of DRAM performance must be between 0 and 100, for example, 80." << std::endl;
 		return 0;
 	}
-	if (SysCatalog::instance().loadDataMgrStatistics(peakWorkVmSize, query_pmem_time, query_dram_time, query_id_diff, query_time_diff, queryColumnFetchStats2, queryColumnChunkStats2, queryColumnFetchDataSizeStats2, columnFetchStats2, columnChunkStats2, columnFetchDataSizeStats2)) {
+
+	if (SysCatalog::instance().loadDataMgrStatistics(profSF_, peakWorkVmSize, query_pmem_time, query_dram_time, query_id_diff, query_time_diff, queryColumnFetchStats2, queryColumnChunkStats2, queryColumnFetchDataSizeStats2, columnFetchStats2, columnChunkStats2, columnFetchDataSizeStats2)) {
 		std::cout << "query_pmem_time and query_dram_time do not have the same query ids" << std::endl;
 		return 0;
 	}

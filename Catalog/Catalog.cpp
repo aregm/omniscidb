@@ -148,7 +148,11 @@ Catalog::Catalog(const string& basePath,
     CheckAndExecuteMigrations();
   }
   buildMaps();
-  setSoftHotColumns();
+
+  if (dataMgr->isPmemUsed()) {
+	  setSoftHotColumns(dataMgr->getProfileScaleFactor());
+  }
+
   if (!is_new_db) {
     CheckAndExecuteMigrationsPostBuildMaps();
   }
@@ -826,7 +830,7 @@ std::string getUserFromId(const int32_t id) {
 
 
 void
-Catalog::setSoftHotColumns(void)
+Catalog::setSoftHotColumns(int sf)
 {
 	std::map<unsigned long, long> query_pmem_time;
 	std::map<unsigned long, long> query_dram_time;
@@ -841,7 +845,7 @@ Catalog::setSoftHotColumns(void)
 
 	size_t peakWorkVmSize;
 
-	if (SysCatalog::instance().loadDataMgrStatistics(peakWorkVmSize, query_pmem_time, query_dram_time, query_id_diff, query_time_diff, queryColumnFetchStats2, queryColumnChunkStats2, queryColumnFetchDataSizeStats2, columnFetchStats2, columnChunkStats2, columnFetchDataSizeStats2)) {
+	if (SysCatalog::instance().loadDataMgrStatistics(sf, peakWorkVmSize, query_pmem_time, query_dram_time, query_id_diff, query_time_diff, queryColumnFetchStats2, queryColumnChunkStats2, queryColumnFetchDataSizeStats2, columnFetchStats2, columnChunkStats2, columnFetchDataSizeStats2)) {
 		std::cout << "query_pmem_time and query_dram_time do not have the same query ids" << std::endl;
 		return;
 	}
@@ -870,6 +874,9 @@ Catalog::setSoftHotColumns(void)
 	  }
 	}
 
+	// favor queries that benefit from memory placement first
+	// TODO: what if not all but some columns of a query can fit in DRAM?
+	// TODO: handle DRAM buffer eviction? for example, columns are used in the order of A, B, C, B, D. Column A can be evicted for column B/C/D
 	for (unsigned int i = 0; i < query_id_diff.size(); i++) {
 		std::map<unsigned long, std::map<std::vector<int>, size_t>>::const_iterator it2;
 
