@@ -877,7 +877,7 @@ Catalog::setSoftHotColumns(int sf)
 	// favor queries that benefit from memory placement first
 	// TODO: what if not all but some columns of a query can fit in DRAM?
 	// TODO: handle DRAM buffer eviction? for example, columns are used in the order of A, B, C, B, D. Column A can be evicted for column B/C/D
-	for (unsigned int i = 0; i < query_id_diff.size(); i++) {
+	for (unsigned int i = 0; i < query_id_diff.size(); i++) { 
 		std::map<unsigned long, std::map<std::vector<int>, size_t>>::const_iterator it2;
 
 		it2 = queryColumnFetchStats2.find(query_id_diff[i]);
@@ -885,35 +885,34 @@ Catalog::setSoftHotColumns(int sf)
 			continue;
 
 		for (std::map<std::vector<int>, size_t>::const_iterator it3 = it2->second.begin(); it3 != it2->second.end(); it3++) {
-		size_t estimatedColumnSize;
+			size_t estimatedColumnSize;
 
-		int dbId = it3->first[0];
-		int tableId = it3->first[1];
-		int columnId = it3->first[2];
+			int dbId = it3->first[0];
+			int tableId = it3->first[1];
+			int columnId = it3->first[2];
 
-		if (dbId != currentDB_.dbId)
-			continue;
+			if (dbId != currentDB_.dbId)
+				continue;
 
-		ColumnIdKey columnIdKey(tableId, columnId);
-		ColumnDescriptorMapById::iterator colDescIt = columnDescriptorMapById_.find(columnIdKey);
-		if (colDescIt == columnDescriptorMapById_.end()) {
-			continue;
-		}
-		if (colDescIt->second->isHotCol || colDescIt->second->isSoftHotCol)
-			continue;
+			ColumnIdKey columnIdKey(tableId, columnId);
+			ColumnDescriptorMapById::iterator colDescIt = columnDescriptorMapById_.find(columnIdKey);
+			if (colDescIt == columnDescriptorMapById_.end()) {
+				continue;
+			}
+			if (colDescIt->second->isHotCol || colDescIt->second->isSoftHotCol)
+				continue;
 
-		estimatedColumnSize = (columnFetchDataSizeStats2[it3->first] * columnChunkStats2[it3->first] + columnFetchStats2[it3->first] - 1) / columnFetchStats2[it3->first];
+			// TODO: do we have a better way to get column size?
+			estimatedColumnSize = (columnFetchDataSizeStats2[it3->first] * columnChunkStats2[it3->first] + columnFetchStats2[it3->first] - 1) / columnFetchStats2[it3->first];
 	  
-		if (totalBytes + estimatedColumnSize <= highWaterMark) {
-			totalBytes += estimatedColumnSize;
-			colDescIt->second->isSoftHotCol = true;
-			std::cout << "Column " << colDescIt->second->columnName << " is set to soft hot" << std::endl; 
-		}
-		else  {
-		  break;
-	  
-		}
-	
+			if (totalBytes + estimatedColumnSize <= highWaterMark) {
+				totalBytes += estimatedColumnSize;
+				colDescIt->second->isSoftHotCol = true;
+				std::cout << "Column " << colDescIt->second->columnName << " is set to soft hot" << std::endl; 
+			}
+			else  {
+				break;
+			}
 		}
 	}
 }

@@ -141,13 +141,13 @@ void
 DataMgr::stopCollectingStatistics(std::map<unsigned long, long>& query_time)
 {
 
-	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchStats;
-	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnChunkStats;
-	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchDataSizeStats;
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchStats;	// number of times column fetched in the query
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnChunkStats;	// number of unique chunks fetched in the query
+	std::map<unsigned long, std::map<std::vector<int>, size_t>> queryColumnFetchDataSizeStats;	// size of data fetched in the query
 
-	std::map<std::vector<int>, size_t> columnFetchStats;
-	std::map<std::vector<int>, size_t> columnChunkStats;
-	std::map<std::vector<int>, size_t> columnFetchDataSizeStats;
+	std::map<std::vector<int>, size_t> columnFetchStats;	// aggregated number of times columns fetched
+	std::map<std::vector<int>, size_t> columnChunkStats;	// aggregated number of unique columns fetched
+	std::map<std::vector<int>, size_t> columnFetchDataSizeStats;	// aggregated size of data fetched
 
 	std::unique_lock<std::mutex> chunkFetchStatsLock(chunkFetchStatsMutex_);
 
@@ -169,7 +169,7 @@ DataMgr::stopCollectingStatistics(std::map<unsigned long, long>& query_time)
 				std::vector<int> key;
 
 				key = itm->first;
-				key.pop_back();		
+				key.pop_back();	// pop off chunk id	
 
 				std::map<std::vector<int>, size_t>::iterator itm2;
 		

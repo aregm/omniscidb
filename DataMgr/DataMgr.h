@@ -147,8 +147,8 @@ class DataMgr {
   size_t reservedGpuMem_;
   std::map<ChunkKey, std::shared_ptr<mapd_shared_mutex>> chunkMutexMap_;
   mapd_shared_mutex chunkMutexMapMutex_;
-  std::map<unsigned long, std::map<ChunkKey, size_t>> chunkFetchStats_;
-  std::map<unsigned long, std::map<ChunkKey, size_t>> chunkFetchDataSizeStats_;
+  std::map<unsigned long, std::map<ChunkKey, size_t>> chunkFetchStats_;	// how many times each chunk fetched in each query
+  std::map<unsigned long, std::map<ChunkKey, size_t>> chunkFetchDataSizeStats_;	// how much data of each chunk fetched in each query
   //std::map<ChunkKey, size_t> chunkFetchStats_;
   //std::map<ChunkKey, size_t> chunkFetchDataSizeStats_;
   std::mutex chunkFetchStatsMutex_;
