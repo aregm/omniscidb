@@ -38,8 +38,10 @@ struct MapDParameters {
   std::string ha_shared_data;       // name of shared data directory base
   bool is_decr_start_epoch;         // are we doing a start epoch decrement?
   size_t cpu_buffer_mem_bytes = 0;  // max size of memory reserved for CPU buffers [bytes]
+#ifdef HAVE_DCPMM
   size_t pmm_buffer_mem_bytes = 0;  // max size of Intel(R) Optane DCPMM memory reserved for CPU buffers [bytes]
   int prof_scale_factor = 1;	    // workload profile scale factor
+#endif /* HAVE_DCPMM */
   size_t gpu_buffer_mem_bytes = 0;  // max size of memory reserved for GPU buffers [bytes]
   double gpu_input_mem_limit = 0.9;  // Punt query to CPU if input mem exceeds % GPU mem
   std::string ssl_cert_file = "";    // file path to server's certified PKI certificate

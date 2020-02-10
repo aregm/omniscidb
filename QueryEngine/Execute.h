@@ -983,8 +983,12 @@ class Executor {
                           const FragmentsList& selected_fragments,
                           const Catalog_Namespace::Catalog&,
                           std::list<ChunkIter>&,
+#ifdef HAVE_DCPMM
                           std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
 			  const unsigned long query_id);
+#else /* HAVE_DCPMM */
+                          std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
+#endif /* HAVE_DCPMM */
 
   std::pair<std::vector<std::vector<int64_t>>, std::vector<std::vector<uint64_t>>>
   getRowCountAndOffsetForAllFrags(
@@ -1122,8 +1126,12 @@ class Executor {
       const CompilationOptions& co,
       const std::vector<InputTableInfo>& query_infos,
       ColumnCacheMap& column_cache,
+#ifdef HAVE_DCPMM
       std::vector<std::string>& fail_reasons,
       const ExecutionOptions& eo);
+#else /* HAVE_DCPMM */
+      std::vector<std::string>& fail_reasons);
+#endif /* HAVE_DCPMM */
   llvm::Value* addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters,
                                    const size_t level_idx);
   void codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
@@ -1157,8 +1165,12 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const MemoryLevel memory_level,
       const JoinHashTableInterface::HashType preferred_hash_type,
+#ifdef HAVE_DCPMM
       ColumnCacheMap& column_cache,
       const ExecutionOptions& eo);
+#else /* HAVE_DCPMM */
+      ColumnCacheMap& column_cache);
+#endif /* HAVE_DCPMM */
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,
                     const RelAlgExecutionUnit& ra_exe_unit);

@@ -199,8 +199,10 @@ class MapDProgramOptions {
   std::string cluster_file = {"cluster.conf"};
   std::string license_path = {""};
   bool cpu_only = false;
+#ifdef HAVE_DCPMM
   std::string pmm_path = {""};
   bool pmm = false;
+#endif /* HAVE_DCPMM */
   bool flush_log = true;
   bool verbose_logging = false;
   bool jit_debug = false;
@@ -292,14 +294,17 @@ void MapDProgramOptions::fillOptions() {
                           po::value<size_t>(&mapd_parameters.cpu_buffer_mem_bytes)
                               ->default_value(mapd_parameters.cpu_buffer_mem_bytes),
                           "Size of memory reserved for CPU buffers, in bytes.");
+#ifdef HAVE_DCPMM
   help_desc.add_options()("pmm-buffer-mem-bytes",
                           po::value<size_t>(&mapd_parameters.pmm_buffer_mem_bytes)
                               ->default_value(mapd_parameters.pmm_buffer_mem_bytes),
                           "Size of Intel(R) Optane DCPMM memory, in bytes.");
+#endif /* HAVE_DCPMM */
   help_desc.add_options()(
       "cpu-only",
       po::value<bool>(&cpu_only)->default_value(cpu_only)->implicit_value(true),
       "Run on CPU only, even if GPUs are available.");
+#ifdef HAVE_DCPMM
   help_desc.add_options()(
       "pmm",
       po::value<std::string>(&pmm_path),
@@ -308,6 +313,7 @@ void MapDProgramOptions::fillOptions() {
                           po::value<int>(&mapd_parameters.prof_scale_factor)
                               ->default_value(mapd_parameters.prof_scale_factor),
                           "Workload profile scale factor");
+#endif /* HAVE_DCPMM */
   help_desc.add_options()("cuda-block-size",
                           po::value<size_t>(&mapd_parameters.cuda_block_size)
                               ->default_value(mapd_parameters.cuda_block_size),
@@ -641,6 +647,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     return false;
   }
 
+#ifdef HAVE_DCPMM
   boost::algorithm::trim_if(pmm_path, boost::is_any_of("\"'"));
   if (pmm_path.length() >0) {
 	  if (!boost::filesystem::exists(pmm_path)) {
@@ -650,6 +657,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
 	  }
 	  pmm = true;
   }
+#endif /* HAVE_DCPMM */
 
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
   const auto data_path = boost::filesystem::path(base_path) / "mapd_data";
@@ -845,8 +853,10 @@ int main(int argc, char** argv) {
                                                   prog_config_opts.string_leaves,
                                                   prog_config_opts.base_path,
                                                   prog_config_opts.cpu_only,
+#ifdef HAVE_DCPMM
                                                   prog_config_opts.pmm,
 						  prog_config_opts.pmm_path,
+#endif /* HAVE_DCPMM */
                                                   prog_config_opts.allow_multifrag,
                                                   prog_config_opts.jit_debug,
                                                   prog_config_opts.read_only,

@@ -43,7 +43,11 @@
   }
 
 DEFINE_ENUM_WITH_STRING_CONVERSIONS(MgrType,
+#ifdef HAVE_DCPMM
                                     (FILE_MGR)(CPU_MGR)(PMM_MGR)(GPU_MGR)(GLOBAL_FILE_MGR))
+#else /* HAVE_DCPMM */
+                                    (FILE_MGR)(CPU_MGR)(GPU_MGR)(GLOBAL_FILE_MGR))
+#endif /* HAVE_DCPMM */
 
 namespace Data_Namespace {
 
@@ -73,7 +77,6 @@ class AbstractBufferMgr {
       const bool purge = true) = 0;  // purge param only used in FileMgr
   virtual void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
                                        const bool purge = true) = 0;
-  //virtual AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) = 0;
   virtual AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) = 0;
   virtual void fetchBuffer(const ChunkKey& key,
                            AbstractBuffer* destBuffer,

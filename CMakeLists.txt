@@ -93,6 +93,11 @@ if( ENABLE_CALCITE_DELETE_PATH )
   add_definitions("-DCALCITE_DELETE_ENABLED")
 endif()
 
+option(ENABLE_DCPMM "Enable DCPMM support" OFF)
+if(ENABLE_DCPMM)
+	add_definitions("-DHAVE_DCPMM")
+endif()
+
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   find_package(CUDA REQUIRED)

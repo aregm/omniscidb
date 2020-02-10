@@ -119,8 +119,10 @@ class MapDHandler : public MapDIf {
               const std::vector<LeafHostInfo>& string_leaves,
               const std::string& base_data_path,
               const bool cpu_only,
+#ifdef HAVE_DCPMM
               const bool pmm,
               const std::string& pmm_path,
+#endif /* HAVE_DCPMM */
               const bool allow_multifrag,
               const bool jit_debug,
               const bool read_only,
@@ -421,6 +423,7 @@ class MapDHandler : public MapDIf {
   void get_license_claims(TLicenseInfo& _return,
                           const TSessionId& session,
                           const std::string& nonce) override;
+//#ifdef HAVE_DCPMM
   // AppDirect
   bool heat_column(const TSessionId& session,
                             const std::string& table_name,
@@ -432,6 +435,7 @@ class MapDHandler : public MapDIf {
   void nodmstats(const TSessionId& session) override;
   int64_t predict_dram_size(const TSessionId& session,
                             const int32_t perf_bar) override;
+//#endif /* HAVE_DCPMM */
 
   void shutdown();
   // end of sync block for HAHandler and mapd.thrift
@@ -540,7 +544,11 @@ class MapDHandler : public MapDIf {
       const bool just_validate,
       const bool find_push_down_candidates,
       const bool just_calcite_explain,
+#ifdef HAVE_DCPMM
       const bool explain_optimized_ir);
+#else /* HAVE_DCPMM */
+      const bool explain_optimized_ir) const;
+#endif /* HAVE_DCPMM */
 
   void execute_rel_alg_with_filter_push_down(
       TQueryResult& _return,
@@ -676,7 +684,9 @@ class MapDHandler : public MapDIf {
   Importer_NS::CopyParams _geo_copy_from_copy_params;
   std::string _geo_copy_from_partitions;
 
+#ifdef HAVE_DCPMM
   std::map<unsigned long, long> _query_time;
+#endif /* HAVE_DCPMM */
 
   // Only for IPC device memory deallocation
   mutable std::mutex handle_to_dev_ptr_mutex_;

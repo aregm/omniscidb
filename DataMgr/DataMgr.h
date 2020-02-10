@@ -69,8 +69,10 @@ class DataMgr {
  public:
   DataMgr(const std::string& dataDir,
           const MapDParameters& mapd_parameters,
+#ifdef HAVE_DCPMM
 	  const bool pmm,
 	  const std::string& pmm_path,
+#endif /* HAVE_DCPMM */
           const bool useGpus,
           const int numGpus,
           const int startGpu = 0,
@@ -85,8 +87,12 @@ class DataMgr {
   AbstractBuffer* getChunkBuffer(const ChunkKey& key,
                                  const MemoryLevel memoryLevel,
                                  const int deviceId = 0,
+#ifdef HAVE_DCPMM
                                  const size_t numBytes = 0,
 				 const unsigned long query_id = 0);
+#else /* HAVE_DCPMM */
+                                 const size_t numBytes = 0);
+#endif /* HAVE_DCPMM */
   void deleteChunksWithPrefix(const ChunkKey& keyPrefix);
   void deleteChunksWithPrefix(const ChunkKey& keyPrefix, const MemoryLevel memLevel);
   AbstractBuffer* alloc(const MemoryLevel memoryLevel,
@@ -123,7 +129,7 @@ class DataMgr {
   size_t getPeakVmSize(void);
   void startCollectingStatistics(void);
   void stopCollectingStatistics(std::map<unsigned long, long>& _query_time);
-  size_t EstimateDramRequired(int percentDramPerf);
+  size_t EstimateDramRecommended(int percentDramPerf);
 
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
 

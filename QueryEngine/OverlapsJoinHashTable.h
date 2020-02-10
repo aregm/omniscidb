@@ -46,8 +46,12 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
       const Data_Namespace::MemoryLevel memory_level,
       const int device_count,
       ColumnCacheMap& column_map,
+#ifdef HAVE_DCPMM
       Executor* executor,
       const ExecutionOptions& eo);
+#else /* HAVE_DCPMM */
+      Executor* executor);
+#endif /* HAVE_DCPMM */
 
   size_t countBufferOff() const noexcept override {
     LOG(FATAL) << "Not supported for this layout";
@@ -61,13 +65,21 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
 
  protected:
   void reifyWithLayout(const int device_count,
+#ifdef HAVE_DCPMM
                        const JoinHashTableInterface::HashType layout,
 		       const ExecutionOptions& eo) override;
+#else /* HAVE_DCPMM */
+                       const JoinHashTableInterface::HashType layout) override;
+#endif /* HAVE_DCPMM */
 
   ColumnsForDevice fetchColumnsForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+#ifdef HAVE_DCPMM
       const int device_id,
       const ExecutionOptions& eo) override;
+#else /* HAVE_DCPMM */
+      const int device_id) override;
+#endif /* HAVE_DCPMM */
 
   std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<ColumnsForDevice>&) const override;

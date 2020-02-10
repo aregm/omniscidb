@@ -120,8 +120,12 @@ static int get_chunks(const Catalog_Namespace::Catalog* catalog,
                                                memory_level,
                                                0,
                                                chunk_meta_it->second.numBytes,
+#ifdef HAVE_DCPMM
                                                chunk_meta_it->second.numElements,
 					       0);
+#else /* HAVE_DCPMM */
+                                               chunk_meta_it->second.numElements);
+#endif /* HAVE_DCPMM */
         chunks.push_back(chunk);
       }
     }
@@ -605,6 +609,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
   ChunkKey chunk_key{
       catalog->getCurrentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
+#ifdef HAVE_DCPMM
   //TODO: get the real query id
   auto chunk = Chunk_NS::Chunk::getChunk(cd,
                                          &catalog->getDataMgr(),
@@ -614,6 +619,15 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                                          chunk_meta_it->second.numBytes,
                                          chunk_meta_it->second.numElements,
 					 0);
+#else /* HAVE_DCPMM */
+  auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                         &catalog->getDataMgr(),
+                                         chunk_key,
+                                         Data_Namespace::CPU_LEVEL,
+                                         0,
+                                         chunk_meta_it->second.numBytes,
+                                         chunk_meta_it->second.numElements);
+#endif /* HAVE_DCPMM */
 
   std::vector<int8_t> has_null_per_thread(ncore, 0);
   std::vector<double> max_double_per_thread(ncore, std::numeric_limits<double>::lowest());
@@ -1010,8 +1024,12 @@ auto InsertOrderFragmenter::getChunksForAllColumns(
                                                memory_level,
                                                0,
                                                chunk_meta_it->second.numBytes,
+#ifdef HAVE_DCPMM
                                                chunk_meta_it->second.numElements,
 					       0);
+#else /* HAVE_DCPMM */
+                                               chunk_meta_it->second.numElements);
+#endif /* HAVE_DCPMM */
         chunks.push_back(chunk);
       }
     }

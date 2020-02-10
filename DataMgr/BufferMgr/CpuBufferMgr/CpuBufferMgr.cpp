@@ -18,13 +18,6 @@
 #include <glog/logging.h>
 #include "../../../CudaMgr/CudaMgr.h"
 #include "CpuBuffer.h"
-#include "Shared/PmemAllocator.h"
-
-//#include <memkind.h>
-
-void *AllocateSlabInPmem(void);
-void FreeSlabInPmem(void *addr);
-int IsPmem(void *);
 
 #include <stdio.h>
 namespace Buffer_Namespace {
@@ -42,27 +35,10 @@ CpuBufferMgr::~CpuBufferMgr() {
   freeAllMem();
 }
 
-#include <sys/sysinfo.h>
-
-#if 0
-int IsToAllocateInDram(size_t size) {
-	struct sysinfo info;
-
-	if (sysinfo(&info))
-		return 0;
-
-	if (((info.freeram + info.bufferram) * 4  >  info.totalram) && ((info.freeram + info.bufferram) * info.mem_unit > size))
-		return 1;
-	else
-		return 0;
-}
-#endif 
-
 void CpuBufferMgr::addSlab(const size_t slabSize) {
   slabs_.resize(slabs_.size() + 1);
   try {
-//		  printf("allocat slab on dram\n");
-	  slabs_.back() = new int8_t[slabSize];
+    slabs_.back() = new int8_t[slabSize];
   } catch (std::bad_alloc&) {
     slabs_.resize(slabs_.size() - 1);
     throw FailedToCreateSlab(slabSize);
@@ -72,9 +48,8 @@ void CpuBufferMgr::addSlab(const size_t slabSize) {
 }
 
 void CpuBufferMgr::freeAllMem() {
-	printf("free all slabs in DRAM\n");
   for (auto bufIt = slabs_.begin(); bufIt != slabs_.end(); ++bufIt) {
-	  delete[] * bufIt;
+    delete[] * bufIt;
   }
 }
 

@@ -67,6 +67,7 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 
 - `-DCMAKE_BUILD_TYPE=release` - Build type and compiler options to use.
                                  Options are `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel`, and unset.
+- `-DENABLE_DCPMM=off` - Enable Intel(R) Optane DCPMM AppDirect mode. Default is `off`.
 - `-DENABLE_ASAN=off` - Enable address sanitizer. Default is `off`.
 - `-DENABLE_AWS_S3=on` - Enable AWS S3 support, if available. Default is `on`.
 - `-DENABLE_CALCITE_DELETE_PATH=on` - Enable Calcite Delete Path. Default is `on`.

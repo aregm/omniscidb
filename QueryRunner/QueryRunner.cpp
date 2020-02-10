@@ -162,7 +162,11 @@ Catalog_Namespace::SessionInfo* get_session(
   const auto reserved_gpu_mem = 256 << 20;
   //TODO: is this correct?
   auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
+#ifdef HAVE_DCPMM
       data_dir.string(), mapd_parms, false, "", uses_gpus, -1, 0, reserved_gpu_mem);
+#else /* HAVE_DCPMM */
+      data_dir.string(), mapd_parms, uses_gpus, -1, 0, reserved_gpu_mem);
+#endif /* HAVE_DCPMM */
 
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 

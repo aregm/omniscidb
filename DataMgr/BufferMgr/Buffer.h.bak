@@ -89,7 +89,7 @@ class Buffer : public AbstractBuffer {
             const MemoryLevel dstBufferType = CPU_LEVEL,
             const int deviceId = -1) override;
 
-  void reserve(const MemoryLevel memLevel, const size_t numBytes) override;
+  void reserve(const size_t numBytes) override;
   /**
    * @brief Writes (copies) data from src into the buffer.
    * Writes (copies) nbytes of data into the buffer at the specified byte offset, from

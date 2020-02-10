@@ -59,8 +59,12 @@ class JoinHashTable : public JoinHashTableInterface {
       const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_cache,
+#ifdef HAVE_DCPMM
       Executor* executor,
       const ExecutionOptions& eo);
+#else /* HAVE_DCPMM */
+      Executor* executor);
+#endif /* HAVE_DCPMM */
 
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
                             const int device_id) noexcept override {
@@ -154,29 +158,49 @@ class JoinHashTable : public JoinHashTableInterface {
       const Fragmenter_Namespace::FragmentInfo& fragment,
       const Data_Namespace::MemoryLevel effective_mem_lvl,
       const int device_id,
+#ifdef HAVE_DCPMM
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       const unsigned long query_id);
+#else /* HAVE_DCPMM */
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
+#endif /* HAVE_DCPMM */
 
   std::pair<const int8_t*, size_t> getAllColumnFragments(
       const Analyzer::ColumnVar& hash_col,
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+#ifdef HAVE_DCPMM
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       const unsigned long query_id);
+#else /* HAVE_DCPMM */
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
+#endif /* HAVE_DCPMM */
 
   ChunkKey genHashTableKey(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
       const Analyzer::Expr* outer_col,
       const Analyzer::ColumnVar* inner_col) const;
 
+#ifdef HAVE_DCPMM
   void reify(const int device_count, const ExecutionOptions& eo);
+#else /* HAVE_DCPMM */
+  void reify(const int device_count);
+#endif /* HAVE_DCPMM */
   void reifyOneToOneForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+#ifdef HAVE_DCPMM
       const int device_id,
       const ExecutionOptions& eo);
+#else /* HAVE_DCPMM */
+      const int device_id);
+#endif /* HAVE_DCPMM */
   void reifyOneToManyForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+#ifdef HAVE_DCPMM
       const int device_id,
       const ExecutionOptions& eo);
+#else /* HAVE_DCPMM */
+      const int device_id);
+#endif /* HAVE_DCPMM */
   void checkHashJoinReplicationConstraint(const int table_id) const;
   void initHashTableForDevice(
       const ChunkKey& chunk_key,
@@ -230,8 +254,12 @@ class JoinHashTable : public JoinHashTableInterface {
       const Data_Namespace::MemoryLevel effective_memory_level,
       const int device_id,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+#ifdef HAVE_DCPMM
       ThrustAllocator& dev_buff_owner,
       const ExecutionOptions& eo);
+#else /* HAVE_DCPMM */
+      ThrustAllocator& dev_buff_owner);
+#endif /* HAVE_DCPMM */
 
   bool isBitwiseEq() const;
 

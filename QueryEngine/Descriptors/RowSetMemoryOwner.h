@@ -18,8 +18,6 @@
 
 #include "../StringDictionary/StringDictionaryProxy.h"
 
-#include "../Shared/checked_alloc.h"
-
 #include <glog/logging.h>
 #include <boost/noncopyable.hpp>
 
@@ -111,24 +109,20 @@ class RowSetMemoryOwner : boost::noncopyable {
   ~RowSetMemoryOwner() {
     for (const auto& count_distinct_buffer : count_distinct_bitmaps_) {
       if (count_distinct_buffer.system_allocated) {
-        //free(count_distinct_buffer.ptr);
-        checked_free(count_distinct_buffer.ptr);
+        free(count_distinct_buffer.ptr);
       }
     }
     for (auto count_distinct_set : count_distinct_sets_) {
       delete count_distinct_set;
     }
     for (auto group_by_buffer : group_by_buffers_) {
-      //free(group_by_buffer);
-      checked_free(group_by_buffer);
+      free(group_by_buffer);
     }
     for (auto varlen_buffer : varlen_buffers_) {
-      //free(varlen_buffer);
-      checked_free(varlen_buffer);
+      free(varlen_buffer);
     }
     for (auto col_buffer : col_buffers_) {
-      //free(col_buffer);
-      checked_free(col_buffer);
+      free(col_buffer);
     }
 
     for (auto dict_proxy : str_dict_proxy_owned_) {

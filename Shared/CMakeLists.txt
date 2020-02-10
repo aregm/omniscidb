@@ -17,5 +17,4 @@ find_package(Boost COMPONENTS filesystem system REQUIRED QUIET)
 # Required by ThriftClient.cpp
 add_definitions("-DTHRIFT_PACKAGE_VERSION=\"${Thrift_VERSION}\"")
 add_library(ThriftClient ThriftClient.cpp)
-#target_link_libraries(ThriftClient ${Thrift_LIBRARIES} ${Boost_LIBRARIES} memkind)
 target_link_libraries(ThriftClient ${Thrift_LIBRARIES} ${Boost_LIBRARIES})

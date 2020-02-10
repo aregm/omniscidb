@@ -185,6 +185,7 @@ void SysCatalog::initDB() {
         "objectPermissions integer, "
         "objectOwnerId integer, UNIQUE(roleName, objectPermissionsType, dbId, "
         "objectId))");
+#ifdef HAVE_DCPMM
     sqliteConnector_->query(
         "CREATE TABLE peak_work_vm(peak_work_vm_size BIGINT)");
     sqliteConnector_->query(
@@ -203,6 +204,7 @@ void SysCatalog::initDB() {
 	"dbid integer reference mapd_databases, "
 	"tableid integer references mapd_tables, columnid integer,"
 	"bufs_fetched BIGINT, unique_chunks_fetched BIGINT, data_fetched BIGINT)");
+#endif /* HAVE_DCPMM */
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -2229,6 +2231,7 @@ SysCatalog::getGranteesOfSharedDashboards(const std::vector<std::string>& dashbo
   return active_grantees;
 }
 
+#ifdef HAVE_DCPMM
 void
 SysCatalog::storeDataMgrStatistics(bool isPmem, size_t& peakWorkVmSize, std::map<unsigned long, long>& query_time, std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnFetchStats, std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnChunkStats, std::map<unsigned long, std::map<std::vector<int>, size_t>>& queryColumnFetchDataSizeStats, std::map<std::vector<int>, size_t> &columnFetchStats, std::map<std::vector<int>, size_t> &columnChunkStats, std::map<std::vector<int>, size_t> &columnFetchDataSizeStats)
 {
@@ -2438,6 +2441,7 @@ SysCatalog::clearDataMgrStatistics(bool isPmem)
 		}
 	}
 }
+#endif /* HAVE_DCPMM */
 
 
 }  // namespace Catalog_Namespace

@@ -150,8 +150,10 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
         context.client.get_dashboard(
             context.dash_return, context.session, context.dash_id);
         break;
+#ifdef HAVE_DCPMM
       default:
         break;
+#endif /* HAVE_DCPMM */
     }
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -180,6 +182,7 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
   return true;
 }
 
+#ifdef HAVE_DCPMM
 template <typename SERVICE_ENUM, typename CLIENT_CONTEXT>
 bool thrift_with_retry(SERVICE_ENUM which_service,
                        CLIENT_CONTEXT& context,
@@ -256,4 +259,5 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
   }
   return true;
 }
+#endif /* HAVE_DCPMM */
 #endif

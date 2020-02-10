@@ -216,8 +216,12 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                                    co,
                                    query_infos,
                                    column_cache,
+#ifdef HAVE_DCPMM
                                    fail_reasons,
 				   eo);
+#else /* HAVE_DCPMM */
+                                   fail_reasons);
+#endif /* HAVE_DCPMM */
     const auto found_outer_join_matches_cb =
         [this, level_idx](llvm::Value* found_outer_join_matches) {
           CHECK_LT(level_idx, cgen_state_->outer_join_match_found_per_level_.size());
@@ -377,8 +381,12 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
     const CompilationOptions& co,
     const std::vector<InputTableInfo>& query_infos,
     ColumnCacheMap& column_cache,
+#ifdef HAVE_DCPMM
     std::vector<std::string>& fail_reasons,
     const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
+    std::vector<std::string>& fail_reasons) {
+#endif /* HAVE_DCPMM */
   if (current_level_join_conditions.type != JoinType::INNER &&
       current_level_join_conditions.quals.size() > 1) {
     fail_reasons.emplace_back("No equijoin expression found for outer join");
@@ -403,8 +411,12 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
           co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                      : MemoryLevel::CPU_LEVEL,
           JoinHashTableInterface::HashType::OneToOne,
+#ifdef HAVE_DCPMM
           column_cache,
 	  eo);
+#else /* HAVE_DCPMM */
+          column_cache);
+#endif /* HAVE_DCPMM */
       current_level_hash_table = hash_table_or_error.hash_table;
     }
     if (hash_table_or_error.hash_table) {

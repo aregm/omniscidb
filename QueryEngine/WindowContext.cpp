@@ -38,12 +38,9 @@ WindowFunctionContext::WindowFunctionContext(
     , device_type_(device_type) {}
 
 WindowFunctionContext::~WindowFunctionContext() {
-  //free(output_);
-  //free(partition_start_);
-  //free(partition_end_);
-  checked_free(output_);
-  checked_free(partition_start_);
-  checked_free(partition_end_);
+  free(output_);
+  free(partition_start_);
+  free(partition_end_);
 }
 
 void WindowFunctionContext::addOrderColumn(

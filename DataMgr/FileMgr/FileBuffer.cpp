@@ -243,7 +243,11 @@ void FileBuffer::read(int8_t* const dst,
   //  LOG(FATAL) << "Unsupported Buffer type";
   //}
 
+#ifdef HAVE_DCPMM
   if ((dstBufferType != CPU_LEVEL) && (dstBufferType != PMM_LEVEL)) {
+#else /* HAVE_DCPMM */
+  if (dstBufferType != CPU_LEVEL) {
+#endif /* HAVE_DCPMM */
     LOG(FATAL) << "Unsupported Buffer type";
   }
 
@@ -510,7 +514,11 @@ void FileBuffer::write(int8_t* src,
   //if (srcBufferType != CPU_LEVEL) {
   //  LOG(FATAL) << "Unsupported Buffer type";
   //}
+#ifdef HAVE_DCPMM
   if ((srcBufferType != CPU_LEVEL) && (srcBufferType != PMM_LEVEL)) {
+#else /* HAVE_DCPMM */
+  if (srcBufferType != CPU_LEVEL) {
+#endif /* HAVE_DCPMM */
     LOG(FATAL) << "Unsupported Buffer type";
   }
   isDirty_ = true;

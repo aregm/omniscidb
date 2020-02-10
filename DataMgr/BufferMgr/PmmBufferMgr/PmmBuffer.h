@@ -17,6 +17,8 @@
 #ifndef PMMBUFFER_H
 #define PMMBUFFER_H
 
+#ifdef HAVE_DCPMM
+
 #include "../Buffer.h"
 
 namespace CudaMgr_Namespace {
@@ -49,5 +51,7 @@ class PmmBuffer : public Buffer {
   CudaMgr_Namespace::CudaMgr* cudaMgr_;
 };
 }  // namespace Buffer_Namespace
+
+#endif /* HAVE_DCPMM */
 
 #endif  // PMMBUFFER_H

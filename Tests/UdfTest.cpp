@@ -159,7 +159,11 @@ class SQLTestEnv : public ::testing::Environment {
 
     MapDParameters mapd_parms;
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
+#ifdef HAVE_DCPMM
         data_dir.string(), mapd_parms, false, "", false, false, 0);
+#else /* HAVE_DCPMM */
+        data_dir.string(), mapd_parms, false, false, 0);
+#endif /* HAVE_DCPMM */
     // if no catalog create one
     auto& sys_cat = SysCatalog::instance();
     sys_cat.init(base_path.string(),

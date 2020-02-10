@@ -57,8 +57,4 @@ struct CheckedAllocDeleter {
   void operator()(void* p) { free(p); }
 };
 
-inline void checked_free(void *p) {
-	   free(p); 
-}
-
 #endif  // CHECKED_ALLOC_H

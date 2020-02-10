@@ -18,7 +18,11 @@
 #define MEMORYLEVEL_H
 
 namespace Data_Namespace {
+#ifdef HAVE_DCPMM
 enum MemoryLevel { DISK_LEVEL = 0, CPU_LEVEL = 1, PMM_LEVEL = 2, GPU_LEVEL = 3 };
+#else /* HAVE_DCPMM */
+enum MemoryLevel { DISK_LEVEL = 0, CPU_LEVEL = 1, GPU_LEVEL = 2 };
+#endif /* HAVE_DCPMM */
 }
 
 #endif  // MEMORYLEVEL_H

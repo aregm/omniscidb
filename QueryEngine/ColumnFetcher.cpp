@@ -27,8 +27,12 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+#ifdef HAVE_DCPMM
     ColumnCacheMap& column_cache,
     unsigned long query_id) {
+#else /* HAVE_DCPMM */
+    ColumnCacheMap& column_cache) {
+#endif /* HAVE_DCPMM */
   static std::mutex columnar_conversion_mutex;
   if (fragment.isEmptyPhysicalFragment()) {
     return {nullptr, 0};
@@ -52,8 +56,12 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
         effective_mem_lvl,
         effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
         chunk_meta_it->second.numBytes,
+#ifdef HAVE_DCPMM
         chunk_meta_it->second.numElements,
 	query_id);
+#else /* HAVE_DCPMM */
+        chunk_meta_it->second.numElements);
+#endif /* HAVE_DCPMM */
     chunks_owner.push_back(chunk);
     CHECK(chunk);
     auto ab = chunk->get_buffer();
@@ -95,8 +103,12 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getAllColumnFragments(
     const Analyzer::ColumnVar& hash_col,
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+#ifdef HAVE_DCPMM
     ColumnCacheMap& column_cache,
     const unsigned long query_id) {
+#else /* HAVE_DCPMM */
+    ColumnCacheMap& column_cache) {
+#endif /* HAVE_DCPMM */
   CHECK(!fragments.empty());
   const size_t elem_width = hash_col.get_type_info().get_size();
   std::vector<const int8_t*> col_frags;
@@ -110,8 +122,12 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getAllColumnFragments(
                                                           Data_Namespace::CPU_LEVEL,
                                                           0,
                                                           chunks_owner,
+#ifdef HAVE_DCPMM
                                                           column_cache,
 							  query_id);
+#else /* HAVE_DCPMM */
+                                                          column_cache);
+#endif /* HAVE_DCPMM */
     if (col_frag == nullptr) {
       continue;
     }
@@ -140,8 +156,12 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
     std::list<ChunkIter>& chunk_iter_holder,
     const Data_Namespace::MemoryLevel memory_level,
+#ifdef HAVE_DCPMM
     const int device_id,
     const unsigned long query_id) const {
+#else /* HAVE_DCPMM */
+    const int device_id) const {
+#endif /* HAVE_DCPMM */
   static std::mutex varlen_chunk_mutex;  // TODO(alex): remove
   static std::mutex chunk_list_mutex;
   const auto fragments_it = all_tables_fragments.find(table_id);
@@ -179,8 +199,12 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
         memory_level,
         memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
         chunk_meta_it->second.numBytes,
+#ifdef HAVE_DCPMM
         chunk_meta_it->second.numElements,
 	query_id);
+#else /* HAVE_DCPMM */
+        chunk_meta_it->second.numElements);
+#endif /* HAVE_DCPMM */
     std::lock_guard<std::mutex> chunk_list_lock(chunk_list_mutex);
     chunk_holder.push_back(chunk);
   }
@@ -211,8 +235,12 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
     const int col_id,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     const Data_Namespace::MemoryLevel memory_level,
+#ifdef HAVE_DCPMM
     const int device_id,
     const unsigned long query_id) const {
+#else /* HAVE_DCPMM */
+    const int device_id) const {
+#endif /* HAVE_DCPMM */
   const auto fragments_it = all_tables_fragments.find(table_id);
   CHECK(fragments_it != all_tables_fragments.end());
   const auto fragments = fragments_it->second;
@@ -241,8 +269,12 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
                                                     chunk_holder,
                                                     chunk_iter_holder,
                                                     Data_Namespace::CPU_LEVEL,
+#ifdef HAVE_DCPMM
                                                     int(0),
 						    query_id);
+#else /* HAVE_DCPMM */
+                                                    int(0));
+#endif /* HAVE_DCPMM */
         column_frags.push_back(
             boost::make_unique<ColumnarResults>(executor_->row_set_mem_owner_,
                                                 col_buffer,

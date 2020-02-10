@@ -37,7 +37,6 @@ CpuBufferMgr::~CpuBufferMgr() {
 
 void CpuBufferMgr::addSlab(const size_t slabSize) {
   slabs_.resize(slabs_.size() + 1);
-  printf("add slab %ld\n", slabSize);
   try {
     slabs_.back() = new int8_t[slabSize];
   } catch (std::bad_alloc&) {

@@ -1909,8 +1909,12 @@ Executor::FetchResult Executor::fetchChunks(
     const FragmentsList& selected_fragments,
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
+#ifdef HAVE_DCPMM
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
     const unsigned long query_id) {
+#else /* HAVE_DCPMM */
+    std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+#endif /* HAVE_DCPMM */
   INJECT_TIMER(fetchChunks);
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
   std::vector<std::vector<size_t>> selected_fragments_crossjoin;
@@ -1967,8 +1971,12 @@ Executor::FetchResult Executor::fetchChunks(
                                                         col_id->getColId(),
                                                         all_tables_fragments,
                                                         memory_level_for_column,
+#ifdef HAVE_DCPMM
                                                         device_id,
 							query_id);
+#else /* HAVE_DCPMM */
+                                                        device_id);
+#endif /* HAVE_DCPMM */
         } else {
           frag_col_buffers[it->second] =
               column_fetcher.getOneTableColumnFragment(table_id,
@@ -1978,8 +1986,12 @@ Executor::FetchResult Executor::fetchChunks(
                                                        chunks,
                                                        chunk_iterators,
                                                        memory_level_for_column,
+#ifdef HAVE_DCPMM
                                                        device_id,
 						       query_id);
+#else /* HAVE_DCPMM */
+                                                       device_id);
+#endif /* HAVE_DCPMM */
         }
       }
     }
@@ -2772,8 +2784,12 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const RelAlgExecutionUnit& ra_exe_unit,
     const MemoryLevel memory_level,
     const JoinHashTableInterface::HashType preferred_hash_type,
+#ifdef HAVE_DCPMM
     ColumnCacheMap& column_cache,
     const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
+    ColumnCacheMap& column_cache) {
+#endif /* HAVE_DCPMM */
   std::shared_ptr<JoinHashTableInterface> join_hash_table;
   const int device_count = deviceCountForMemoryLevel(memory_level);
   CHECK_GT(device_count, 0);
@@ -2788,8 +2804,12 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                            memory_level,
                                                            device_count,
                                                            column_cache,
+#ifdef HAVE_DCPMM
                                                            this,
 							   eo);
+#else /* HAVE_DCPMM */
+                                                           this);
+#endif /* HAVE_DCPMM */
     } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
                    qual_bin_oper->get_left_operand())) {
       join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
@@ -2799,8 +2819,12 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                            preferred_hash_type,
                                                            device_count,
                                                            column_cache,
+#ifdef HAVE_DCPMM
                                                            this,
 							   eo);
+#else /* HAVE_DCPMM */
+                                                           this);
+#endif /* HAVE_DCPMM */
     } else {
       try {
         join_hash_table = JoinHashTable::getInstance(qual_bin_oper,
@@ -2810,8 +2834,12 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                      preferred_hash_type,
                                                      device_count,
                                                      column_cache,
+#ifdef HAVE_DCPMM
                                                      this,
 						     eo);
+#else /* HAVE_DCPMM */
+                                                     this);
+#endif /* HAVE_DCPMM */
       } catch (TooManyHashEntries&) {
         const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
         CHECK_EQ(join_quals.size(), size_t(1));
@@ -2824,8 +2852,12 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                              preferred_hash_type,
                                                              device_count,
                                                              column_cache,
+#ifdef HAVE_DCPMM
                                                              this,
 							     eo);
+#else /* HAVE_DCPMM */
+                                                             this);
+#endif /* HAVE_DCPMM */
       }
     }
     CHECK(join_hash_table);

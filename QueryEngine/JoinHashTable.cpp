@@ -306,8 +306,12 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const HashType preferred_hash_type,
     const int device_count,
     ColumnCacheMap& column_cache,
+#ifdef HAVE_DCPMM
     Executor* executor,
     const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
+    Executor* executor) {
+#endif /* HAVE_DCPMM */
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
   const auto cols =
       get_cols(qual_bin_oper.get(), *executor->getCatalog(), executor->temporary_tables_);
@@ -340,24 +344,26 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
           source_col_range.hasNulls());
     }
   }
+#ifdef HAVE_DCPMM
+  //TODO: limit max hash entries based on memory size
+#else /* HAVE_DCPMM */
   // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
-  //const auto max_hash_entry_count =
-  //    memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
-  //        ? static_cast<size_t>(std::numeric_limits<int32_t>::max() / sizeof(int32_t))
-  //        : static_cast<size_t>(std::numeric_limits<int32_t>::max());
-
   const auto max_hash_entry_count =
       memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
           ? static_cast<size_t>(std::numeric_limits<int32_t>::max() / sizeof(int32_t))
-          : (static_cast<size_t>(std::numeric_limits<int32_t>::max()) * 4);
+          : static_cast<size_t>(std::numeric_limits<int32_t>::max());
+#endif /* HAVE_DCPMM */
 
+#ifdef HAVE_DCPMM
+  //TODO: limit max hash entries based on memory size
+#else /* HAVE_DCPMM */
   auto bucketized_entry_count_info = get_bucketized_hash_entry_info(
       ti, col_range, qual_bin_oper->get_optype() == kBW_EQ);
   auto bucketized_entry_count = bucketized_entry_count_info.getNormalizedHashEntryCount();
-
-//  if (bucketized_entry_count > max_hash_entry_count) {
-//    throw TooManyHashEntries();
-//  }
+  if (bucketized_entry_count > max_hash_entry_count) {
+    throw TooManyHashEntries();
+  }
+#endif /* HAVE_DCPMM */
 
   if (qual_bin_oper->get_optype() == kBW_EQ &&
       col_range.getIntMax() >= std::numeric_limits<int64_t>::max()) {
@@ -375,7 +381,11 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
                                                        executor,
                                                        device_count));
   try {
+#ifdef HAVE_DCPMM
     join_hash_table->reify(device_count, eo);
+#else /* HAVE_DCPMM */
+    join_hash_table->reify(device_count);
+#endif /* HAVE_DCPMM */
   } catch (const TableMustBeReplicated& e) {
     // Throw a runtime error to abort the query
     join_hash_table->freeHashBufferMemory();
@@ -407,23 +417,35 @@ std::pair<const int8_t*, size_t> JoinHashTable::getOneColumnFragment(
     const Fragmenter_Namespace::FragmentInfo& fragment,
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
+#ifdef HAVE_DCPMM
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     const unsigned long query_id) {
+#else /* HAVE_DCPMM */
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
+#endif /* HAVE_DCPMM */
   return ColumnFetcher::getOneColumnFragment(executor_,
                                              hash_col,
                                              fragment,
                                              effective_mem_lvl,
                                              device_id,
                                              chunks_owner,
+#ifdef HAVE_DCPMM
                                              column_cache_,
 					     query_id);
+#else /* HAVE_DCPMM */
+                                             column_cache_);
+#endif /* HAVE_DCPMM */
 }
 
 std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
     const Analyzer::ColumnVar& hash_col,
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+#ifdef HAVE_DCPMM
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     unsigned long query_id) {
+#else /* HAVE_DCPMM */
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
+#endif /* HAVE_DCPMM */
   std::lock_guard<std::mutex> linearized_multifrag_column_lock(
       linearized_multifrag_column_mutex_);
   if (linearized_multifrag_column_.first) {
@@ -432,7 +454,11 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
   const int8_t* col_buff;
   size_t total_elem_count;
   std::tie(col_buff, total_elem_count) = ColumnFetcher::getAllColumnFragments(
+#ifdef HAVE_DCPMM
       executor_, hash_col, fragments, chunks_owner, column_cache_, query_id);
+#else /* HAVE_DCPMM */
+      executor_, hash_col, fragments, chunks_owner, column_cache_);
+#endif /* HAVE_DCPMM */
   linearized_multifrag_column_owner_.addColBuffer(col_buff);
   if (!shardCount()) {
     linearized_multifrag_column_ = {col_buff, total_elem_count};
@@ -486,7 +512,11 @@ std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
   return shards_for_device;
 }
 
+#ifdef HAVE_DCPMM
 void JoinHashTable::reify(const int device_count, const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
+void JoinHashTable::reify(const int device_count) {
+#endif /* HAVE_DCPMM */
   CHECK_LT(0, device_count);
   const auto& catalog = *executor_->getCatalog();
   const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
@@ -496,10 +526,14 @@ void JoinHashTable::reify(const int device_count, const ExecutionOptions& eo) {
   if (query_info.fragments.empty()) {
     return;
   }
-  //if (query_info.getNumTuplesUpperBound() >
-  //    static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
-  //  throw TooManyHashEntries();
-  //}
+#ifdef HAVE_DCPMM
+  //TODO: limit max number of hash entries based on memory size
+#else /* HAVE_DCPMM */
+  if (query_info.getNumTuplesUpperBound() >
+      static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+    throw TooManyHashEntries();
+  }
+#endif /* HAVE_DCPMM */
 #ifdef HAVE_CUDA
   gpu_hash_table_buff_.resize(device_count);
   gpu_hash_table_err_buff_.resize(device_count);
@@ -520,8 +554,12 @@ void JoinHashTable::reify(const int device_count, const ExecutionOptions& eo) {
                          : &JoinHashTable::reifyOneToManyForDevice,
                      this,
                      fragments,
+#ifdef HAVE_DCPMM
                      device_id,
 		     eo));
+#else /* HAVE_DCPMM */
+                     device_id));
+#endif /* HAVE_DCPMM */
     }
     for (auto& init_thread : init_threads) {
       init_thread.wait();
@@ -544,8 +582,12 @@ void JoinHashTable::reify(const int device_count, const ExecutionOptions& eo) {
                                         &JoinHashTable::reifyOneToManyForDevice,
                                         this,
                                         fragments,
+#ifdef HAVE_DCPMM
                                         device_id,
 					eo));
+#else /* HAVE_DCPMM */
+                                        device_id));
+#endif /* HAVE_DCPMM */
     }
     for (auto& init_thread : init_threads) {
       init_thread.wait();
@@ -562,8 +604,12 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+#ifdef HAVE_DCPMM
     ThrustAllocator& dev_buff_owner,
     const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
+    ThrustAllocator& dev_buff_owner) {
+#endif /* HAVE_DCPMM */
   static std::mutex fragment_fetch_mutex;
   const bool has_multi_frag = fragment_info.size() > 1;
   const auto& catalog = *executor_->getCatalog();
@@ -575,7 +621,11 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
   const size_t elem_width = hash_col->get_type_info().get_size();
   if (has_multi_frag) {
     std::tie(col_buff, elem_count) =
+#ifdef HAVE_DCPMM
         getAllColumnFragments(*hash_col, fragment_info, chunks_owner, eo.query_id);
+#else /* HAVE_DCPMM */
+        getAllColumnFragments(*hash_col, fragment_info, chunks_owner);
+#endif /* HAVE_DCPMM */
   }
 
   {
@@ -595,7 +645,11 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
       }
     } else {
       std::tie(col_buff, elem_count) = getOneColumnFragment(
+#ifdef HAVE_DCPMM
           *hash_col, first_frag, effective_memory_level, device_id, chunks_owner, eo.query_id);
+#else /* HAVE_DCPMM */
+          *hash_col, first_frag, effective_memory_level, device_id, chunks_owner);
+#endif /* HAVE_DCPMM */
     }
   }
   return {col_buff, elem_count};
@@ -628,8 +682,12 @@ ChunkKey JoinHashTable::genHashTableKey(
 
 void JoinHashTable::reifyOneToOneForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+#ifdef HAVE_DCPMM
     const int device_id,
     const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
+    const int device_id) {
+#endif /* HAVE_DCPMM */
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.getDataMgr();
   const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
@@ -665,8 +723,12 @@ void JoinHashTable::reifyOneToOneForDevice(
                                                   effective_memory_level,
                                                   device_id,
                                                   chunks_owner,
+#ifdef HAVE_DCPMM
                                                   dev_buff_owner,
 						  eo);
+#else /* HAVE_DCPMM */
+                                                  dev_buff_owner);
+#endif /* HAVE_DCPMM */
 
   initHashTableForDevice(genHashTableKey(fragments, cols.second, inner_col),
                          col_buff,
@@ -678,8 +740,12 @@ void JoinHashTable::reifyOneToOneForDevice(
 
 void JoinHashTable::reifyOneToManyForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+#ifdef HAVE_DCPMM
     const int device_id,
     const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
+    const int device_id) {
+#endif /* HAVE_DCPMM */
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.getDataMgr();
   const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
@@ -714,8 +780,12 @@ void JoinHashTable::reifyOneToManyForDevice(
                                                   effective_memory_level,
                                                   device_id,
                                                   chunks_owner,
+#ifdef HAVE_DCPMM
                                                   dev_buff_owner,
 						  eo);
+#else /* HAVE_DCPMM */
+                                                  dev_buff_owner);
+#endif /* HAVE_DCPMM */
 
   initOneToManyHashTable(genHashTableKey(fragments, cols.second, inner_col),
                          col_buff,

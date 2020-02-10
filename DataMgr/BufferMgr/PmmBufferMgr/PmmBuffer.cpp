@@ -14,43 +14,13 @@
  * limitations under the License.
  */
 
+#ifdef HAVE_DCPMM
+
 #include "PmmBuffer.h"
 #include <glog/logging.h>
 #include <cassert>
 #include <cstring>
 #include "../../../CudaMgr/CudaMgr.h"
-
-/*
- *  * Copyright 2017-2019, Intel Corporation
- *   *
- *    * Redistribution and use in source and binary forms, with or without
- *     * modification, are permitted provided that the following conditions
- *      * are met:
- *       *
- *        *     * Redistributions of source code must retain the above copyright
- *         *       notice, this list of conditions and the following disclaimer.
- *          *
- *           *     * Redistributions in binary form must reproduce the above copyright
- *            *       notice, this list of conditions and the following disclaimer in
- *             *       the documentation and/or other materials provided with the
- *              *       distribution.
- *               *
- *                *     * Neither the name of the copyright holder nor the names of its
- *                 *       contributors may be used to endorse or promote products derived
- *                  *       from this software without specific prior written permission.
- *                   *
- *                    * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *                     * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *                      * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- *                       * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- *                        * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- *                         * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- *                          * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- *                           * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- *                            * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- *                             * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- *                              * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *                               */
 
 #include <immintrin.h>
 #include <stddef.h>
@@ -540,7 +510,7 @@ void PmmBuffer::readData(int8_t* const dst,
                          const int dstDeviceId) {
   if (dstMemoryLevel == CPU_LEVEL || dstMemoryLevel == PMM_LEVEL) {
 //	  printf("read data dst=%p, src=%p\n", dst, mem_ + offset);
-    mymemcpy((char *)dst, (const char *)(mem_ + offset), numBytes);
+    memcpy((char *)dst, (const char *)(mem_ + offset), numBytes);
   } else if (dstMemoryLevel == GPU_LEVEL) {
     //@todo: use actual device id in next call
     assert(dstDeviceId >= 0);
@@ -558,7 +528,7 @@ void PmmBuffer::writeData(int8_t* const src,
                           const int srcDeviceId) {
   if (srcMemoryLevel == CPU_LEVEL || srcMemoryLevel == PMM_LEVEL) {
     //std::cout << "Writing to CPU from source CPU" << std::endl;
-    mymemcpy((char *)(mem_ + offset), (const char *)src, numBytes);
+    memcpy((char *)(mem_ + offset), (const char *)src, numBytes);
   } else if (srcMemoryLevel == GPU_LEVEL) {
     // std::cout << "Writing to CPU from source GPU" << std::endl;
     //@todo: use actual device id in next call
@@ -571,3 +541,5 @@ void PmmBuffer::writeData(int8_t* const src,
 }
 
 }  // namespace Buffer_Namespace
+
+#endif /* HAVE_DCPMM */

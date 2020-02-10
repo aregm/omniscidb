@@ -23,8 +23,6 @@
 #include "../Shared/nocuda.h"
 #endif  // HAVE_CUDA
 
-#include "../Shared/checked_alloc.h"
-
 #include <cstdlib>
 #include <memory>
 #include <mutex>
@@ -110,8 +108,7 @@ class RenderAllocatorMap {
   // multiple Cuda files. Including the checked_alloc header is currently problematic for
   // nvcc.
   struct HostBufferDeleter {
-    //void operator()(void* p) { free(p); }
-    void operator()(void* p) { checked_free(p); }
+    void operator()(void* p) { free(p); }
   };
   using HostBufPtrType = std::unique_ptr<int8_t, HostBufferDeleter>;
   HostBufPtrType host_render_buffer_;

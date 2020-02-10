@@ -89,6 +89,7 @@ void completion(const char* buf, linenoiseCompletions* lc) {
 
 #define LOAD_PATCH_SIZE 10000
 
+#ifdef HAVE_DCPMM
 void set_column_hot(ClientContext& context, char const *table, char const *column) {
 	if (thrift_with_retry(kHEAT_COLUMN, context, table, column)) {
 		std::cout << "Column " << column << " in table " << table << " is set to hot." << std::endl;
@@ -132,18 +133,19 @@ void predict_dram_size(ClientContext& context, char const *perf_bar_str) {
 	}
 	else {
 		if (size > 1024 * 1024 * 1024) {
-			std::cout << "At least " << ((size * 1.0) / (1024 * 1024 * 1024)) << "GB of DRAM required." << std::endl;
+			std::cout << "At least " << ((size * 1.0) / (1024 * 1024 * 1024)) << "GB of DRAM recommended." << std::endl;
 		}
 		else {
 			if (size > 1024 * 1024) {
-				std::cout << "At least " << ((size * 1.0) / (1024 * 1024)) << "MB of DRAM required." << std::endl;
+				std::cout << "At least " << ((size * 1.0) / (1024 * 1024)) << "MB of DRAM recommended." << std::endl;
 			}
 			else {
-				std::cout << "At least " << size << "bytes of DRAM required." << std::endl;
+				std::cout << "At least " << size << "bytes of DRAM recommended." << std::endl;
 			}
 		}
 	}
 }
+#endif /* HAVE_DCPMM */
 
 void copy_table(char const* filepath, char const* table, ClientContext& context) {
   if (context.session == INVALID_SESSION_ID) {
@@ -1515,11 +1517,13 @@ int main(int argc, char** argv) {
         ( "\\timing", 1, 1, [&](Params const&) { print_timing = true; } )
         ( "\\notiming", 1, 1, [&](Params const&) { print_timing = false; } )
         ( "\\db", 1, 2, SwitchDatabaseCmd<>( context ), "Usage: \\db [database|...]" )
+#ifdef HAVE_DCPMM
         ( "\\heat_column", 3, 3, [&](Params const& p) { set_column_hot(context, p[1].c_str(), p[2].c_str() ); } )
         ( "\\cool_column", 3, 3, [&](Params const& p) { set_column_cold(context, p[1].c_str(), p[2].c_str() ); } )
         ( "\\dmstats", 1, 1, [&](Params const& p) { dmstats(context); } )
         ( "\\nodmstats", 1, 1, [&](Params const& p) { nodmstats(context); } )
         ( "\\predict_dram_size", 2, 2, [&](Params const& p) { predict_dram_size(context, p[1].c_str() ); } )
+#endif /* HAVE_DCPMM */
         .is_resolved();
 
       if (resolution_status == false) {

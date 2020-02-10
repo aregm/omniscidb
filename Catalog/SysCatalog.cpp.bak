@@ -2211,37 +2211,4 @@ SysCatalog::getGranteesOfSharedDashboards(const std::vector<std::string>& dashbo
   return active_grantees;
 }
 
-void
-SysCatalog::storeDataMgrStatistics(std::map<std::vector<int>, size_t> &columnFetchStats, std::map<std::vector<int>, size_t> &columnChunkStats, std::map<std::vector<int>, size_t> &columnFetchDataSizeStats)
-{
-	for (std::map<std::vector<int>, size_t>::const_iterator it2 = columnFetchStats.begin(); it2 != columnFetchStats.end(); ++it2) {
-		struct DBMetadata db;
-		std::shared_ptr<Catalog> cat;
-
-		if (SysCatalog::instance().getMetadataForDBById((it2->first)[0], db)) {
-			cat = Catalog::get(db.dbName);
-		
-			if (cat) {
-				cat->storeDataMgrStatistics((it2->first)[1], (it2->first)[2], it2->second, columnChunkStats[it2->first], columnFetchDataSizeStats[it2->first]);
-			}
-		}
-	}
-}
-
-void
-SysCatalog::clearDataMgrStatistics(void)
-{
-	std::shared_ptr<Catalog> cat;
-	std::list<DBMetadata> dblist;
-
-	dblist = SysCatalog::instance().getAllDBMetadata();
-	for (std::list<DBMetadata>::iterator it = dblist.begin(); it != dblist.end(); ++it) {
-		cat = Catalog::get(it->dbName);
-		if (cat) {
-			cat->clearDataMgrStatistics();
-		}
-	}
-}
-
-
 }  // namespace Catalog_Namespace

@@ -38,14 +38,20 @@ struct ColumnDescriptor {
   bool isVirtualCol;
   std::string virtualExpr;
   bool isDeletedCol;
+#ifdef HAVE_DCPMM
   bool isHotCol;
   bool isSoftHotCol;
   size_t chunkBufsFetched;
   size_t uniqueChunksFetched;
   size_t chunkDataFetched;
+#endif /* HAVE_DCPMM */
   bool isGeoPhyCol{false};
 
+#ifdef HAVE_DCPMM
   ColumnDescriptor() : isSystemCol(false), isVirtualCol(false), isDeletedCol(false), isHotCol(false), isSoftHotCol(false), chunkBufsFetched(0), uniqueChunksFetched(0), chunkDataFetched(0) {}
+#else /* HAVE_DCPMM */
+  ColumnDescriptor() : isSystemCol(false), isVirtualCol(false), isDeletedCol(false) {}
+#endif /* HAVE_DCPMM */
   ColumnDescriptor(const int tableId,
                    const int columnId,
                    const std::string& columnName,
@@ -57,6 +63,7 @@ struct ColumnDescriptor {
       , columnType(columnType)
       , isSystemCol(false)
       , isVirtualCol(false)
+#ifdef HAVE_DCPMM
       , isDeletedCol(false)
       , isHotCol(false) 
       ,	isSoftHotCol(false)
@@ -64,6 +71,9 @@ struct ColumnDescriptor {
       , uniqueChunksFetched(0)
       , chunkDataFetched(0)
 	{}
+#else /* HAVE_DCPMM */
+      , isDeletedCol(false) {}
+#endif /* HAVE_DCPMM */
   ColumnDescriptor(const bool isGeoPhyCol) : ColumnDescriptor() {
     this->isGeoPhyCol = isGeoPhyCol;
   }

@@ -107,7 +107,9 @@
 
 #include "QueryEngine/ArrowUtil.h"
 
+#ifdef HAVE_DCPMM
 #include "DataMgr/DataMgr.h"
+#endif /* HAVE_DCPMM */
 
 #define ENABLE_GEO_IMPORT_COLUMN_MATCHING 0
 
@@ -123,7 +125,9 @@ using namespace Lock_Namespace;
   LOG(ERROR) << ex.error_msg;        \
   throw ex;
 
+#ifdef HAVE_DCPMM
 volatile unsigned long qid = 0;
+#endif /* HAVE_DCPMM */
 
 namespace {
 
@@ -142,8 +146,10 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const std::vector<LeafHostInfo>& string_leaves,
                          const std::string& base_data_path,
                          const bool cpu_only,
+#ifdef HAVE_DCPMM
                          const bool pmm,
                          const std::string& pmm_path,
+#endif /* HAVE_DCPMM */
                          const bool allow_multifrag,
                          const bool jit_debug,
                          const bool read_only,
@@ -204,8 +210,10 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
   }
   data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
                                               mapd_parameters,
+#ifdef HAVE_DCPMM
 					      pmm,
 					      pmm_path,
+#endif /* HAVE_DCPMM */
                                               !cpu_mode_only_,
                                               num_gpus,
                                               start_gpu,
@@ -4390,7 +4398,11 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
     const bool just_validate,
     const bool find_push_down_candidates,
     const bool just_calcite_explain,
+#ifdef HAVE_DCPMM
     const bool explain_optimized_ir) {
+#else /* HAVE_DCPMM */
+    const bool explain_optimized_ir) const {
+#endif /* HAVE_DCPMM */
   INJECT_TIMER(execute_rel_alg);
   const auto& cat = session_info.getCatalog();
   CompilationOptions co = {executor_device_type,
@@ -4400,8 +4412,9 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                            explain_optimized_ir ? ExecutorExplainType::Optimized
                                                 : ExecutorExplainType::Default};
 
+#ifdef HAVE_DCPMM
   unsigned long query = __sync_add_and_fetch(&qid, 1);
-
+#endif /* HAVE_DCPMM */
 
   ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
@@ -4414,8 +4427,12 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                          g_dynamic_watchdog_time_limit,
                          find_push_down_candidates,
                          just_calcite_explain,
+#ifdef HAVE_DCPMM
                          mapd_parameters_.gpu_input_mem_limit,
   			 query};
+#else /* HAVE_DCPMM */
+                         mapd_parameters_.gpu_input_mem_limit};
+#endif /* HAVE_DCPMM */
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -4428,14 +4445,14 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                                                      nullptr,
                                                      nullptr),
                          {}};
-  std::cout << "execute_rel_alg Query " << query << std::endl;
-
   _return.execution_time_ms += measure<>::execution(
       [&]() { result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr); });
   // reduce execution time by the time spent during queue waiting
   _return.execution_time_ms -= result.getRows()->getQueueTime();
 
+#ifdef HAVE_DCPMM
   _query_time[query] = _return.execution_time_ms;
+#endif /* HAVE_DCPMM */
 
   const auto& filter_push_down_info = result.getPushedDownFilterInfo();
   if (!filter_push_down_info.empty()) {
@@ -4466,7 +4483,9 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
 
+#ifdef HAVE_DCPMM
   unsigned long query = __sync_add_and_fetch(&qid, 1);
+#endif /* HAVE_DCPMM */
   ExecutionOptions eo = {false,
                          allow_multifrag_,
                          false,
@@ -4478,16 +4497,18 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                          g_dynamic_watchdog_time_limit,
                          false,
                          false,
+#ifdef HAVE_DCPMM
                          mapd_parameters_.gpu_input_mem_limit,
   			 query};
+#else /* HAVE_DCPMM */
+                         mapd_parameters_.gpu_input_mem_limit};
+#endif /* HAVE_DCPMM */
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
                                         mapd_parameters_,
                                         nullptr);
   RelAlgExecutor ra_executor(executor.get(), cat);
-
-  std::cout << "execute_rel_alg_df Query " << query << std::endl;
 
   const auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
   const auto rs = result.getRows();
@@ -5610,6 +5631,7 @@ void MapDHandler::get_license_claims(TLicenseInfo& _return,
 bool MapDHandler::heat_column(const TSessionId& session,
                                        const std::string& table_name,
                                        const std::string& column_name) {
+#ifdef HAVE_DCPMM
   auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   auto td = cat.getMetadataForTable(table_name, false);  // don't populate fragmenter on this call since we only want metadata
@@ -5632,12 +5654,14 @@ bool MapDHandler::heat_column(const TSessionId& session,
     } catch (const std::runtime_error& e) {
       THROW_MAPD_EXCEPTION(e.what());
     }
+#endif /* HAVE_DCPMM */
   return true;
 }
 
 bool MapDHandler::cool_column(const TSessionId& session,
                                        const std::string& table_name,
                                        const std::string& column_name) {
+#ifdef HAVE_DCPMM
   auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   auto td = cat.getMetadataForTable(table_name, false);  // don't populate fragmenter on this call since we only want metadata
@@ -5660,34 +5684,42 @@ bool MapDHandler::cool_column(const TSessionId& session,
     } catch (const std::runtime_error& e) {
       THROW_MAPD_EXCEPTION(e.what());
     }
+#endif /* HAVE_DCPMM */
   return true;
 }
 
 void MapDHandler::dmstats(const TSessionId& session) {
+#ifdef HAVE_DCPMM
 	_query_time.clear();
 	qid = 0;	//reset global query identifier
 
   auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   cat.getDataMgr().startCollectingStatistics();  
+#endif /* HAVE_DCPMM */
 }
 
 void MapDHandler::nodmstats(const TSessionId& session) {
-	std::cout << "Query time " << std::endl;
-	for (std::map<unsigned long, long>::iterator it = _query_time.begin(); it != _query_time.end(); it++) 
-		std::cout << it->first << " " << it->second << std::endl;
+#ifdef HAVE_DCPMM
+	//std::cout << "Query time " << std::endl;
+	//for (std::map<unsigned long, long>::iterator it = _query_time.begin(); it != _query_time.end(); it++) 
+	//	std::cout << it->first << " " << it->second << std::endl;
 
   auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   cat.getDataMgr().stopCollectingStatistics(_query_time);  
+#endif /* HAVE_DCPMM */
 }
 
 int64_t MapDHandler::predict_dram_size(const TSessionId& session, const int32_t perf_bar) {
+#ifdef HAVE_DCPMM
   auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
-  return cat.getDataMgr().EstimateDramRequired(perf_bar);
+  return cat.getDataMgr().EstimateDramRecommended(perf_bar);
+#else /* HAVE_DCPMM */
+  return 0;
+#endif /* HAVE_DCPMM */
 }
-
 
 void MapDHandler::shutdown() {
   if (calcite_) {

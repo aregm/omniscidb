@@ -95,8 +95,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
       copy_to_gpu(data_mgr, gpu_bitset, cpu_bitset, bitmap_sz_bytes, device_id);
       bitsets_.push_back(reinterpret_cast<int8_t*>(gpu_bitset));
     }
-    //free(cpu_bitset);
-    checked_free(cpu_bitset);
+    free(cpu_bitset);
   } else {
     bitsets_.push_back(cpu_bitset);
   }
@@ -112,8 +111,7 @@ InValuesBitmap::~InValuesBitmap() {
   }
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
     CHECK_EQ(size_t(1), bitsets_.size());
-    //free(bitsets_.front());
-    checked_free(bitsets_.front());
+    free(bitsets_.front());
   }
 }
 

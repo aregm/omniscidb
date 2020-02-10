@@ -59,7 +59,9 @@
 #include "RWLocks.h"
 #include "SharedDictionaryValidator.h"
 
+#ifdef HAVE_DCPMM
 #include <sys/sysinfo.h>
+#endif /* HAVE_DCPMM */
 
 using Chunk_NS::Chunk;
 using Fragmenter_Namespace::InsertOrderFragmenter;
@@ -149,9 +151,11 @@ Catalog::Catalog(const string& basePath,
   }
   buildMaps();
 
+#ifdef HAVE_DCPMM
   if (dataMgr->isPmemUsed()) {
 	  setSoftHotColumns(dataMgr->getProfileScaleFactor());
   }
+#endif /* HAVE_DCPMM */
 
   if (!is_new_db) {
     CheckAndExecuteMigrationsPostBuildMaps();
@@ -829,6 +833,7 @@ std::string getUserFromId(const int32_t id) {
 }  // namespace
 
 
+#ifdef HAVE_DCPMM
 void
 Catalog::setSoftHotColumns(int sf)
 {
@@ -916,6 +921,7 @@ Catalog::setSoftHotColumns(int sf)
 		}
 	}
 }
+#endif /* HAVE_DCPMM */
 
 void Catalog::buildMaps() {
   cat_write_lock write_lock(this);
@@ -978,18 +984,24 @@ void Catalog::buildMaps() {
   string columnQuery(
       "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, "
       "is_notnull, compression, comp_param, "
+#ifdef HAVE_DCPMM
       "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol, is_hotcol, is_softhotcol, bufs_fetched, unique_chunks_fetched, data_fetched from "
+#else /* HAVE_DCPMM */
+      "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol from "
+#endif /* HAVE_DCPMM */
       "mapd_columns ORDER BY tableid, "
       "columnid");
   sqliteConnector_.query(columnQuery);
   numRows = sqliteConnector_.getNumRows();
   int32_t skip_physical_cols = 0;
 
+#ifdef HAVE_DCPMM
   //AppDirect
   //typedef std::tuple<float, size_t> ColumnFetchIdKey;
   //typedef std::multimap<ColumnFetchIdKey, ColumnDescriptor *> ColumnDescriptorMapByFetchId;
 
   //ColumnDescriptorMapByFetchId columnDescriptorMapByFetchId;
+#endif /* HAVE_DCPMM */
 
   for (size_t r = 0; r < numRows; ++r) {
     ColumnDescriptor* cd = new ColumnDescriptor();
@@ -1009,21 +1021,24 @@ void Catalog::buildMaps() {
     cd->isVirtualCol = sqliteConnector_.getData<bool>(r, 13);
     cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
     cd->isDeletedCol = sqliteConnector_.getData<bool>(r, 15);
+#ifdef HAVE_DCPMM
     cd->isHotCol = sqliteConnector_.getData<bool>(r, 16);
     cd->isSoftHotCol = sqliteConnector_.getData<bool>(r, 17);
     cd->chunkBufsFetched = sqliteConnector_.getData<size_t>(r, 18);
     cd->uniqueChunksFetched = sqliteConnector_.getData<size_t>(r, 19);
     cd->chunkDataFetched = sqliteConnector_.getData<size_t>(r, 20);
+#endif /* HAVE_DCPMM */
     cd->isGeoPhyCol = skip_physical_cols > 0;
     ColumnKey columnKey(cd->tableId, to_upper(cd->columnName));
     columnDescriptorMap_[columnKey] = cd;
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
     columnDescriptorMapById_[columnIdKey] = cd;
 
+#ifdef HAVE_DCPMM
     //Appdirect
     //ColumnFetchIdKey columnFetchIdKey((cd->uniqueChunksFetched ? ((cd->chunkBufsFetched * 1.0) / cd->uniqueChunksFetched) : 0.0), cd->chunkDataFetched);
     //columnDescriptorMapByFetchId.insert(std::pair<ColumnFetchIdKey, ColumnDescriptor *>(columnFetchIdKey, cd));
-
+#endif /* HAVE_DCPMM */
     if (skip_physical_cols <= 0) {
       skip_physical_cols = cd->columnType.get_physical_cols();
     }
@@ -1039,6 +1054,7 @@ void Catalog::buildMaps() {
     }
   }
 
+#ifdef HAVE_DCPMM
 #if 0
   // AppDirect: determine hotness of each column
   size_t totalBytes = 0;
@@ -1085,7 +1101,7 @@ void Catalog::buildMaps() {
 	  }
   }
 #endif /* 0 */
-
+#endif /* HAVE_DCPMM */
 
   // sort columnIdBySpi_ based on columnId
   for (auto& tit : tableDescriptorMapById_) {
@@ -1830,12 +1846,20 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
       "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, "
       "colscale, is_notnull, "
       "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr, "
+#ifdef HAVE_DCPMM
       "is_deletedcol, is_hotcol, is_softhotcol, bufs_fetched, unique_chunks_fetched, data_fetched) "
+#else /* HAVE_DCPMM */
+      "is_deletedcol) "
+#endif /* HAVE_DCPMM */
       "VALUES (?, "
       "(SELECT max(columnid) + 1 FROM mapd_columns WHERE tableid = ?), "
       "?, ?, ?, "
       "?, "
+#ifdef HAVE_DCPMM
       "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+#else /* HAVE_DCPMM */
+      "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+#endif /* HAVE_DCPMM */
       std::vector<std::string>{std::to_string(td.tableId),
                                std::to_string(td.tableId),
                                cd.columnName,
@@ -1851,12 +1875,16 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
                                std::to_string(cd.isSystemCol),
                                std::to_string(cd.isVirtualCol),
                                cd.virtualExpr,
+#ifdef HAVE_DCPMM
                                std::to_string(cd.isDeletedCol),
                                std::to_string(cd.isHotCol),
                                std::to_string(cd.isSoftHotCol),
                                std::to_string(cd.chunkBufsFetched),
                                std::to_string(cd.uniqueChunksFetched),
                                std::to_string(cd.chunkDataFetched)});
+#else /* HAVE_DCPMM */
+                               std::to_string(cd.isDeletedCol)});
+#endif /* HAVE_DCPMM */
 
   sqliteConnector_.query_with_text_params(
       "UPDATE mapd_tables SET ncolumns = ncolumns + 1 WHERE tableid = ?",
@@ -2088,8 +2116,10 @@ void Catalog::createTable(
   cd.columnName = "rowid";
   cd.isSystemCol = true;
 
+#ifdef HAVE_DCPMM
   // keep it hot
   cd.isHotCol = true;
+#endif /* HAVE_DCPMM */
 
   cd.columnType = SQLTypeInfo(kBIGINT, true);
 #ifdef MATERIALIZED_ROWID
@@ -2171,10 +2201,18 @@ void Catalog::createTable(
             "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, "
             "coldim, colscale, is_notnull, "
             "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, "
+#ifdef HAVE_DCPMM
             "virtual_expr, is_deletedcol, is_hotcol, is_softhotcol, bufs_fetched, unique_chunks_fetched, data_fetched) "
+#else /* HAVE_DCPMM */
+            "virtual_expr, is_deletedcol) "
+#endif /* HAVE_DCPMM */
             "VALUES (?, ?, ?, ?, ?, "
             "?, "
+#ifdef HAVE_DCPMM
             "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+#else /* HAVE_DCPMM */
+            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+#endif /* HAVE_DCPMM */
             std::vector<std::string>{std::to_string(td.tableId),
                                      std::to_string(colId),
                                      cd.columnName,
@@ -2190,12 +2228,16 @@ void Catalog::createTable(
                                      std::to_string(cd.isSystemCol),
                                      std::to_string(cd.isVirtualCol),
                                      cd.virtualExpr,
+#ifdef HAVE_DCPMM
                                      std::to_string(cd.isDeletedCol),
                                      std::to_string(cd.isHotCol),
                                std::to_string(cd.isSoftHotCol),
                                std::to_string(cd.chunkBufsFetched),
                                std::to_string(cd.uniqueChunksFetched),
                                std::to_string(cd.chunkDataFetched)});
+#else /* HAVE_DCPMM */
+                                     std::to_string(cd.isDeletedCol)});
+#endif /* HAVE_DCPMM */
         cd.tableId = td.tableId;
         cd.columnId = colId++;
         cds.push_back(cd);
@@ -2322,7 +2364,6 @@ const bool Catalog::checkMetadataForDeletedRecs(int dbId,
   // check if there are rows deleted by examining metadata for the deletedColumn metadata
   ChunkKey chunkKeyPrefix = {dbId, tableId, columnId};
   std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
-
   dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix);
   int64_t chunk_max{0};
 
@@ -2828,6 +2869,7 @@ void Catalog::renameColumn(const TableDescriptor* td,
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
 }
 
+#ifdef HAVE_DCPMM
 void Catalog::setColumnHot(const TableDescriptor* td, ColumnDescriptor* cd) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
@@ -2908,6 +2950,7 @@ void Catalog::clearDataMgrStatistics(void)
   }
   sqliteConnector_.query("END TRANSACTION");
 }
+#endif /* HAVE_DCPMM */
 
 int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
   {
@@ -3258,8 +3301,12 @@ void Catalog::optimizeTable(const TableDescriptor* td) const {
                                                    updel_roll.memoryLevel,
                                                    0,
                                                    cm.second.numBytes,
+#ifdef HAVE_DCPMM
                                                    cm.second.numElements,
 						   0);
+#else /* HAVE_DCPMM */
+                                                   cm.second.numElements);
+#endif /* HAVE_DCPMM */
       td->fragmenter->compactRows(this,
                                   td,
                                   cm.first[3],

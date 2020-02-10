@@ -207,20 +207,17 @@ ResultSet::~ResultSet() {
   if (storage_) {
     CHECK(storage_->getUnderlyingBuffer());
     if (!storage_->buff_is_provided_) {
-      //free(storage_->getUnderlyingBuffer());
-      checked_free(storage_->getUnderlyingBuffer());
+      free(storage_->getUnderlyingBuffer());
     }
   }
   for (auto& storage : appended_storage_) {
     if (storage && !storage->buff_is_provided_) {
-      //free(storage->getUnderlyingBuffer());
-      checked_free(storage->getUnderlyingBuffer());
+      free(storage->getUnderlyingBuffer());
     }
   }
   if (host_estimator_buffer_) {
     CHECK(device_type_ == ExecutorDeviceType::CPU || estimator_buffer_);
-    //free(host_estimator_buffer_);
-    checked_free(host_estimator_buffer_);
+    free(host_estimator_buffer_);
   }
 }
 

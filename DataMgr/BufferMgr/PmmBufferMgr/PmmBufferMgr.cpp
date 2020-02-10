@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
+#ifdef HAVE_DCPMM 
+
 #include "PmmBufferMgr.h"
 #include <glog/logging.h>
 #include "../../../CudaMgr/CudaMgr.h"
 #include "PmmBuffer.h"
 #include "Shared/PmemAllocator.h"
-
-//#include <memkind.h>
 
 #include <stdio.h>
 namespace Buffer_Namespace {
@@ -39,22 +39,6 @@ PmmBufferMgr::PmmBufferMgr(const int deviceId,
 PmmBufferMgr::~PmmBufferMgr() {
   freeAllMem();
 }
-
-#include <sys/sysinfo.h>
-
-#if 0
-int IsToAllocateInDram(size_t size) {
-	struct sysinfo info;
-
-	if (sysinfo(&info))
-		return 0;
-
-	if (((info.freeram + info.bufferram) * 4  >  info.totalram) && ((info.freeram + info.bufferram) * info.mem_unit > size))
-		return 1;
-	else
-		return 0;
-}
-#endif /* 0 */
 
 void PmmBufferMgr::addSlab(const size_t slabSize) {
   slabs_.resize(slabs_.size() + 1);
@@ -114,3 +98,5 @@ void PmmBufferMgr::allocateBuffer(BufferList::iterator segIt,
 }
 
 }  // namespace Buffer_Namespace
+
+#endif /* HAVE_DCPMM */

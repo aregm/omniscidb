@@ -1884,7 +1884,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const ssize_t previous_count) {
   INJECT_TIMER(executeWorkUnit);
 
-  std::cout << "thread " << std::this_thread::get_id() << " executeWorkUnit " << std::endl;
   auto co = co_in;
   ColumnCacheMap column_cache;
   if (is_window_execution_unit(work_unit.exe_unit)) {

@@ -31,14 +31,22 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
     ColumnCacheMap& column_map,
+#ifdef HAVE_DCPMM
     Executor* executor,
     const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
+    Executor* executor) {
+#endif /* HAVE_DCPMM */
   const auto& query_info =
       get_inner_query_info(getInnerTableId(condition.get(), executor), query_infos).info;
   const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
-//  if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
-//    throw TooManyHashEntries();
-//  }
+#ifdef HAVE_DCPMM
+  //TODO: limit max number of hash entries beased on memory size 
+#else /* HAVE_DCPMM */
+  if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+    throw TooManyHashEntries();
+  }
+#endif /* HAVE_DCPMM */
   const auto shard_count = memory_level == Data_Namespace::GPU_LEVEL
                                ? BaselineJoinHashTable::getShardCountForCondition(
                                      condition.get(), ra_exe_unit, executor)
@@ -55,7 +63,11 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
   join_hash_table->checkHashJoinReplicationConstraint(
       getInnerTableId(condition.get(), executor));
   try {
+#ifdef HAVE_DCPMM
     join_hash_table->reify(device_count, eo);
+#else /* HAVE_DCPMM */
+    join_hash_table->reify(device_count);
+#endif /* HAVE_DCPMM */
   } catch (const HashJoinFail& e) {
     throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
                                    "involved in equijoin | ") +
@@ -72,8 +84,12 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
 
 void OverlapsJoinHashTable::reifyWithLayout(
     const int device_count,
+#ifdef HAVE_DCPMM
     const JoinHashTableInterface::HashType layout,
     const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
+    const JoinHashTableInterface::HashType layout) {
+#endif /* HAVE_DCPMM */
   CHECK(layout == JoinHashTableInterface::HashType::OneToMany);
   layout_ = layout;
   const auto& query_info = get_inner_query_info(getInnerTableId(), query_infos_).info;
@@ -87,7 +103,11 @@ void OverlapsJoinHashTable::reifyWithLayout(
         shard_count
             ? only_shards_for_device(query_info.fragments, device_id, device_count)
             : query_info.fragments;
+#ifdef HAVE_DCPMM
     const auto columns_for_device = fetchColumnsForDevice(fragments, device_id, eo);
+#else /* HAVE_DCPMM */
+    const auto columns_for_device = fetchColumnsForDevice(fragments, device_id);
+#endif /* HAVE_DCPMM */
     columns_per_device.push_back(columns_for_device);
   }
 
@@ -109,8 +129,12 @@ void OverlapsJoinHashTable::reifyWithLayout(
                                       this,
                                       columns_per_device[device_id],
                                       layout,
+#ifdef HAVE_DCPMM
                                       device_id,
 				      eo));
+#else /* HAVE_DCPMM */
+                                      device_id));
+#endif /* HAVE_DCPMM */
   }
   for (auto& init_thread : init_threads) {
     init_thread.wait();
@@ -122,8 +146,12 @@ void OverlapsJoinHashTable::reifyWithLayout(
 
 BaselineJoinHashTable::ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+#ifdef HAVE_DCPMM
     const int device_id,
     const ExecutionOptions& eo) {
+#else /* HAVE_DCPMM */
+    const int device_id) {
+#endif /* HAVE_DCPMM */
   const auto& catalog = *executor_->getCatalog();
   const auto inner_outer_pairs =
       normalize_column_pairs(condition_.get(), catalog, executor_->getTemporaryTables());
@@ -141,7 +169,11 @@ BaselineJoinHashTable::ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDe
       throw FailedToJoinOnVirtualColumn();
     }
     const auto join_column_info = fetchColumn(
+#ifdef HAVE_DCPMM
         inner_col, effective_memory_level, fragments, chunks_owner, device_id, eo);
+#else /* HAVE_DCPMM */
+        inner_col, effective_memory_level, fragments, chunks_owner, device_id);
+#endif /* HAVE_DCPMM */
     join_columns.emplace_back(
         JoinColumn{join_column_info.col_buff, join_column_info.num_elems});
     const auto& ti = inner_col->get_type_info();

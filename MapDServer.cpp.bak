@@ -791,8 +791,6 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   return true;
 }
 
-int InitializePmem(void);
-
 int main(int argc, char** argv) {
   MapDProgramOptions prog_config_opts;
   int return_code = 0;
@@ -800,8 +798,6 @@ int main(int argc, char** argv) {
   if (!prog_config_opts.parse_command_line(argc, argv, return_code)) {
     return return_code;
   };
-
-  InitializePmem();
 
   // rudimetary signal handling to try to guarantee the logging gets flushed to
   // files on shutdown

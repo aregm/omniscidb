@@ -244,8 +244,6 @@ class SysCatalog : private CommonFileOperations {
 
   static void clearCpuMemory();
   static void clearGpuMemory();
-  void storeDataMgrStatistics(std::map<std::vector<int>, size_t> &columnFetchStats, std::map<std::vector<int>, size_t> &columnChunkStats, std::map<std::vector<int>, size_t> &columnFetchDataSizeStats);
-  void clearDataMgrStatistics(void);
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
   std::string name() const { return OMNISCI_DEFAULT_DB; }

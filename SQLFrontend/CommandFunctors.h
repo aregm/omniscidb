@@ -256,6 +256,7 @@ StandardCommand(Help, {
   std::cout << "\\object_privileges {database|table} <object_name> Reports all "
                "privileges granted to an object for all "
                "roles and users.\n";
+#ifdef HAVE_DCPMM
   std::cout << "\\heat_column <table> <column> Set "
                "<table>.<column> hot.\n";
   std::cout << "\\cool_column <table> <column> Set "
@@ -265,7 +266,8 @@ StandardCommand(Help, {
   std::cout << "\\nodmstats Stop collecting "
                "data manager statistics.\n";
   std::cout << "\\predict_dram_size<perf_bar> Predict "
-               "amount of DRAM required to meet a performance threshold in AppDirect mode.\n";
+               "amount of DRAM recommended to meet a performance target in AppDirect mode.\n";
+#endif /* HAVE_DCPMM */
   std::cout << "\\q Quit.\n";
   std::cout.flush();
 });

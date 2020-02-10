@@ -193,8 +193,12 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::vector<InputTableInfo>& query_infos,
       const CompilationOptions& co,
+#ifdef HAVE_DCPMM
       ColumnCacheMap& column_cache_map,
       const ExecutionOptions& eo);
+#else /* HAVE_DCPMM */
+      ColumnCacheMap& column_cache_map);
+#endif /* HAVE_DCPMM */
 
   ExecutionResult executeFilter(const RelFilter*,
                                 const CompilationOptions&,

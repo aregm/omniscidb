@@ -19,14 +19,20 @@
  * @author Todd Mostak <todd@mapd.com>
  */
 
+#ifdef HAVE_DCPMM
 #include "Catalog/SysCatalog.h"
+#endif /* HAVE_DCPMM */
 #include "DataMgr.h"
 #include "../CudaMgr/CudaMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
+#ifdef HAVE_DCPMM
 #include "BufferMgr/PmmBufferMgr/PmmBufferMgr.h"
+#endif /* HAVE_DCPMM */
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "FileMgr/GlobalFileMgr.h"
+#ifdef HAVE_DCPMM
 #include "Shared/PmemAllocator.h"
+#endif /* HAVE_DCPMM */
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
@@ -43,16 +49,20 @@
 using namespace std;
 using namespace Buffer_Namespace;
 using namespace File_Namespace;
+#ifdef HAVE_DCPMM
 using namespace Catalog_Namespace;
 
 size_t GetMaxPmemBufferSize(void);
+#endif /* HAVE_DCPMM */
 
 namespace Data_Namespace {
 
 DataMgr::DataMgr(const string& dataDir,
                  const MapDParameters& mapd_parameters,
+#ifdef HAVE_DCPMM
 		 const bool pmm,
 		 const std::string& pmm_path,
+#endif /* HAVE_DCPMM */
                  const bool useGpus,
                  const int numGpus,
                  const int startGpu,
@@ -71,6 +81,7 @@ DataMgr::DataMgr(const string& dataDir,
     hasGpus_ = false;
   }
 
+#ifdef HAVE_DCPMM
   hasPmm_ = false;
   profSF_ = mapd_parameters.prof_scale_factor;
   if (pmm) {
@@ -81,11 +92,13 @@ DataMgr::DataMgr(const string& dataDir,
   }
 
   statisticsOn_ = false;
+#endif /* HAVE_DCPMM */
 
   populateMgrs(mapd_parameters, numReaderThreads);
   createTopLevelMetadata();
 }
 
+#ifdef HAVE_DCPMM
 void
 DataMgr::startCollectingStatistics(void)
 {
@@ -235,11 +248,11 @@ DataMgr::stopCollectingStatistics(std::map<unsigned long, long>& query_time)
 
 	std::cout << "Data manager statistics off." << std::endl;
 
-	EstimateDramRequired(100);
+	EstimateDramRecommended(100);
 }
 
 size_t
-DataMgr::EstimateDramRequired(int percentDramPerf)
+DataMgr::EstimateDramRecommended(int percentDramPerf)
 {
 	std::map<unsigned long, long> query_pmem_time;
 	std::map<unsigned long, long> query_dram_time;
@@ -313,17 +326,15 @@ DataMgr::EstimateDramRequired(int percentDramPerf)
 	}
 
 
-	size_t dramRequired = peakWorkVmSize;
+	size_t dramRecommended = peakWorkVmSize;
 	for (std::map<std::vector<int>, size_t>::iterator it = hotColumnFetchStats2.begin(); it != hotColumnFetchStats2.end(); it++) {
 		size_t estimatedColumnSize;
 
 		estimatedColumnSize = hotColumnFetchDataSizeStats2[it->first] * hotColumnChunkStats2[it->first] * 1.0 / it->second;
-		dramRequired += estimatedColumnSize;
+		dramRecommended += estimatedColumnSize;
 	}
 
-	//printf("Need %lu DRAM\n", dramRequired);
-
-	return dramRequired;
+	return dramRecommended;
 
 #if 0
 	for (std::map<unsigned long, long>::const_iterator it = query_pmem_time.begin(); it != query_pmem_time.end(); ++it) {
@@ -343,19 +354,24 @@ DataMgr::EstimateDramRequired(int percentDramPerf)
 #endif /* 0 */
 
 }
+#endif /* HAVE_DCPMM */
 
 DataMgr::~DataMgr() {
 
+#ifdef HAVE_DCPMM
 	//stopCollectingStatistics();
 
 		chunkFetchStats_.clear();
 		chunkFetchDataSizeStats_.clear();
+#endif /* HAVE_DCPMM */
 
   int numLevels = bufferMgrs_.size();
   for (int level = numLevels - 1; level >= 0; --level) {
     for (size_t device = 0; device < bufferMgrs_[level].size(); device++) {
+#ifdef HAVE_DCPMM
       if (!hasPmm_ && level == PMM_LEVEL)
 	continue;	// CPU_LEVEL and PMM_LEVEL share the same manager
+#endif /* HAVE_DCPMM */
       delete bufferMgrs_[level][device];
     }
   }
@@ -383,6 +399,7 @@ size_t DataMgr::getTotalSystemMemory() {
 void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
                            const size_t userSpecifiedNumReaderThreads) {
 
+#ifdef HAVE_DCPMM
   AbstractBufferMgr *pmmMgr = NULL;
   AbstractBufferMgr *cpuMgr = NULL;
 
@@ -436,7 +453,7 @@ void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
   }
 
 
-#if 0
+#else /* HAVE_DCPMM */
   bufferMgrs_.resize(2);
   bufferMgrs_[0].push_back(new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
   levelSizes_.push_back(1);
@@ -474,7 +491,7 @@ void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
         0, cpuBufferSize, cudaMgr_.get(), cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
   }
-#endif /* 0 */
+#endif /* HAVE_DCPMM */
 }
 
 void DataMgr::convertDB(const std::string basePath) {
@@ -652,8 +669,10 @@ void DataMgr::clearMemory(const MemoryLevel memLevel) {
       throw std::runtime_error("Unable to clear GPU memory: No GPUs detected");
     }
   } else {
+#ifdef HAVE_DCPMM
     if (!hasPmm_ && (memLevel == PMM_LEVEL))
       return;	// CPU_LEVEL and PMM_LEVEL share the same manager
+#endif /* HAVE_DCPMM */
 
     bufferMgrs_[memLevel][0]->clearSlabs();
   }
@@ -690,9 +709,14 @@ AbstractBuffer* DataMgr::createChunkBuffer(const ChunkKey& key,
 AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
                                         const MemoryLevel memoryLevel,
                                         const int deviceId,
+#ifdef HAVE_DCPMM
                                         const size_t numBytes,
 					const unsigned long query_id) {
+#else /* HAVE_DCPMM */
+                                        const size_t numBytes) {
+#endif /* HAVE_DCPMM */
 
+#ifdef HAVE_DCPMM
 	//std::cout << "thread " << std::this_thread::get_id() << " getChunkBuffer for query " << query_id << " " << numBytes << std::endl;
 
 	//for (std::vector<int>::const_iterator it2 = key.begin() ; it2 != key.end(); ++it2)
@@ -736,6 +760,7 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
 	
 		chunkFetchStatsLock.unlock();
 	}
+#endif /* HAVE_DCPMM */
 
   auto level = static_cast<size_t>(memoryLevel);
 
@@ -748,8 +773,10 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
   int numLevels = bufferMgrs_.size();
   for (int level = numLevels - 1; level >= 0; --level) {
     for (int device = 0; device < levelSizes_[level]; ++device) {
+#ifdef HAVE_DCPMM
       if (!hasPmm_ && (level == PMM_LEVEL))
 	continue;	//CPU_LEVEL and PMM_LEVEL share the same manager
+#endif /* HAVE_DCPMM */
       bufferMgrs_[level][device]->deleteBuffersWithPrefix(keyPrefix);
     }
   }
@@ -758,8 +785,10 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {
 // only deletes the chunks at the given memory level
 void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix,
                                      const MemoryLevel memLevel) {
+#ifdef HAVE_DCPMM
   if (!hasPmm_ && (memLevel == PMM_LEVEL))
     return;
+#endif /* HAVE_DCPMM */
 
   if (bufferMgrs_.size() <= memLevel) {
     return;
@@ -806,8 +835,10 @@ void DataMgr::copy(AbstractBuffer* destBuffer, AbstractBuffer* srcBuffer) {
 void DataMgr::checkpoint(const int db_id, const int tb_id) {
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
     // use reverse iterator so we start at GPU level, then CPU then DISK
+#ifdef HAVE_DCPMM
     if (!hasPmm_ && (*levelIt == bufferMgrs_[PMM_LEVEL]))
       continue;	//CPU_LEVEL and PMM_LEVEL share the same manager
+#endif /* HAVE_DCPMM */
     for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
       (*deviceIt)->checkpoint(db_id, tb_id);
     }
@@ -817,8 +848,10 @@ void DataMgr::checkpoint(const int db_id, const int tb_id) {
 void DataMgr::checkpoint() {
   for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
     // use reverse iterator so we start at GPU level, then CPU then DISK
+#ifdef HAVE_DCPMM
     if (!hasPmm_ && (*levelIt == bufferMgrs_[PMM_LEVEL]))
       continue;	//CPU_LEVEL and PMM_LEVEL share the same manager
+#endif /* HAVE_DCPMM */
     for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
       (*deviceIt)->checkpoint();
     }

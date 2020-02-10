@@ -63,8 +63,6 @@ void Executor::ExecutionDispatch::runImpl(
     const FragmentsList& frag_list,
     const int64_t rowid_lookup_key) {
 
-//	std::cout << "therad " << std::this_thread::get_id() << " run query" << std::endl;
-
   const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
                                 ? Data_Namespace::GPU_LEVEL
                                 : Data_Namespace::CPU_LEVEL;
@@ -96,8 +94,12 @@ void Executor::ExecutionDispatch::runImpl(
                                           frag_list,
                                           cat_,
                                           *chunk_iterators_ptr,
+#ifdef HAVE_DCPMM
                                           chunks,
 					  eo.query_id);
+#else /* HAVE_DCPMM */
+                                          chunks);
+#endif /* HAVE_DCPMM */
     if (fetch_result.num_rows.empty()) {
       return;
     }
